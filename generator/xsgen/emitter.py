@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from generator.xsgen.model import ComposePlan
-from generator.xsgen.program_harness import emit_program_wrapper
+from generator.xsgen.program_harness import emit_program_wrapper, program_entry_symbol
 
 
 def descriptor_symbol(snippet_id: str) -> str:
@@ -15,7 +15,6 @@ def format_seed_literal(seed: int) -> str:
 
 
 def emit_harness(plan: ComposePlan, output_path: Path) -> Path:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     has_run_phase = plan.run_snippet_ids is not None
     has_check_phase = plan.check_snippet_ids is not None
 
@@ -24,6 +23,21 @@ def emit_harness(plan: ComposePlan, output_path: Path) -> Path:
             "run_snippet_ids and check_snippet_ids must both be set or both be None"
         )
 
+    snippets_by_id = {snippet.id: snippet for snippet in plan.snippets}
+    if has_check_phase:
+        check_am_programs = [
+            snippet_id
+            for snippet_id in plan.check_snippet_ids
+            if snippets_by_id.get(snippet_id) is not None
+            and snippets_by_id[snippet_id].kind == "am_program"
+        ]
+        if check_am_programs:
+            raise ValueError(
+                "check_snippets cannot include am_program snippets: "
+                + ", ".join(check_am_programs)
+            )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         '#include "xsrt_env.h"',
         '#include "xs_snippet.h"',
@@ -37,7 +51,13 @@ def emit_harness(plan: ComposePlan, output_path: Path) -> Path:
         if snippet.kind == "am_program":
             if '#include "xsam/program_snippet.h"' not in lines:
                 lines.insert(2, '#include "xsam/program_snippet.h"')
-            lines.extend(emit_program_wrapper(snippet))
+            emit_program_wrapper(snippet, output_path.parent)
+            lines.extend(
+                [
+                    f"extern int {program_entry_symbol(snippet.id)}(void);",
+                    f"extern const xsrt_snippet_desc_t {descriptor_symbol(snippet.id)};",
+                ]
+            )
         else:
             lines.append(
                 f"extern const xsrt_snippet_desc_t {descriptor_symbol(snippet.id)};"

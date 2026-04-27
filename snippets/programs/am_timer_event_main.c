@@ -4,6 +4,7 @@
 #include "xsam/program_snippet.h"
 #include "xs_interrupt_response.h"
 #include "xsrt_intr.h"
+#include "xsrt_trap.h"
 
 enum {
   XSAM_TIMER_EVENT_FLAG = 1u << 10,
@@ -21,6 +22,13 @@ static xsam_context_t *am_timer_event_handler(xsam_event_t event, xsam_context_t
   return ctx;
 }
 
+static int am_timer_event_finish(int code) {
+  xsam_intr_write(0);
+  xsrt_timer_set_cte_active(0);
+  xsrt_install_strap(0);
+  return code;
+}
+
 int main(void) {
   xsrt_env_t *env = xsam_current_env();
   uint64_t last_time;
@@ -35,13 +43,14 @@ int main(void) {
   }
 
   xsam_intr_write(1);
+  env->flags |= (uint64_t) XS_INTERRUPT_FLAG_TIMER_ARMED;
   last_time = 0u;
   last_compare = 0u;
 
   for (uint64_t spin = 0; spin < XSAM_TIMER_EVENT_SPINS; ++spin) {
     if ((env->flags & (uint64_t) XSAM_TIMER_EVENT_FLAG) != 0u) {
       env->flags |= (uint64_t) XS_INTERRUPT_FLAG_TRAP_OBSERVED;
-      return 0;
+      return am_timer_event_finish(0);
     }
     last_time = xsrt_timer_read_uptime();
     last_compare = xsrt_timer_read_compare();
@@ -49,8 +58,8 @@ int main(void) {
   }
 
   if (last_time < last_compare) {
-    return XSAM_TIMER_EVENT_TIMER_NOT_EXPIRED;
+    return am_timer_event_finish(XSAM_TIMER_EVENT_TIMER_NOT_EXPIRED);
   }
 
-  return XSAM_TIMER_EVENT_TIMEOUT;
+  return am_timer_event_finish(XSAM_TIMER_EVENT_TIMEOUT);
 }

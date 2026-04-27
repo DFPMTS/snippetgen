@@ -1,6 +1,7 @@
 from pathlib import Path
 import importlib
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -286,9 +287,19 @@ class SnippetLoadingTest(unittest.TestCase):
             with self.subTest(path=relative_path):
                 self.assertTrue((ROOT / relative_path).is_file())
 
-    def test_prefetchw_default_target_addr_matches_default_emu_repro_window(self) -> None:
+    def test_prefetchw_default_target_addr_stays_outside_default_ram_window(self) -> None:
         header_text = (ROOT / "snippets/include/xs_prefetchw.h").read_text()
-        self.assertIn("#define XS_PREFETCHW_TARGET_ADDR ((uint64_t) 0x90000000ull)", header_text)
+        self.assertIn("#define XS_PREFETCHW_TARGET_ADDR", header_text)
+        target_match = re.search(r"XS_PREFETCHW_TARGET_ADDR \(\(uint64_t\) 0x([0-9a-fA-F]+)ull\)", header_text)
+        self.assertIsNotNone(target_match)
+        target = int(target_match.group(1), 16)
+        self.assertFalse(0x80000000 <= target < 0xC0000000)
+
+    def test_prefetchw_source_uses_raw_encoding_for_default_toolchain(self) -> None:
+        source_text = (ROOT / "snippets/cbo/prefetchw_tl_denied_fault.c").read_text()
+
+        self.assertIn(".word 0x0037e013", source_text)
+        self.assertNotIn('__asm__ volatile("prefetch.w', source_text)
 
     def test_prefetchw_minimal_case_has_no_probe_loop_controls(self) -> None:
         header_text = (ROOT / "snippets/include/xs_prefetchw.h").read_text()
@@ -346,16 +357,7 @@ class SnippetLoadingTest(unittest.TestCase):
                         "-Wall",
                         "-Wextra",
                         "-Werror",
-                        "-O2",
-                        "-march=rv64gcv_zicbop",
-                        "-mabi=lp64d",
-                        "-mcmodel=medany",
-                        "-ffreestanding",
-                        "-fno-asynchronous-unwind-tables",
-                        "-fno-builtin",
-                        "-fno-stack-protector",
-                        "-fno-tree-vectorize",
-                        "-fno-tree-slp-vectorize",
+                        *toolchain.riscv_compile_flags(),
                         "-I",
                         str(ROOT / "runtime/include"),
                         "-I",
@@ -391,7 +393,7 @@ class SnippetLoadingTest(unittest.TestCase):
                         "-Wextra",
                         "-Werror",
                         "-O2",
-                        "-march=rv64gcv_zicbop",
+                        "-march=rv64gc",
                         "-mabi=lp64d",
                         "-mcmodel=medany",
                         "-ffreestanding",
@@ -415,6 +417,44 @@ class SnippetLoadingTest(unittest.TestCase):
                 )
                 self.assertEqual(0, result.returncode, msg=result.stderr)
 
+    def test_prefetchw_sources_compile_without_zicbop_mnemonic_support(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            toolchain = importlib.import_module("generator.xsgen.toolchain")
+            gcc = toolchain.detect_toolchain()["gcc"]
+            src_path = ROOT / "snippets/cbo/prefetchw_tl_denied_fault.c"
+            out_path = Path(tmpdir) / "prefetchw_tl_denied_fault.o"
+            result = subprocess.run(
+                [
+                    gcc,
+                    "-std=c11",
+                    "-Wall",
+                    "-Wextra",
+                    "-Werror",
+                    "-O2",
+                    "-march=rv64gc",
+                    "-mabi=lp64d",
+                    "-mcmodel=medany",
+                    "-ffreestanding",
+                    "-fno-asynchronous-unwind-tables",
+                    "-fno-builtin",
+                    "-fno-stack-protector",
+                    "-fno-tree-vectorize",
+                    "-fno-tree-slp-vectorize",
+                    "-I",
+                    str(ROOT / "runtime/include"),
+                    "-I",
+                    str(ROOT / "snippets/include"),
+                    "-c",
+                    str(src_path),
+                    "-o",
+                    str(out_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(0, result.returncode, msg=result.stderr)
+
     def test_deferred_check_sources_compile(self) -> None:
         snippet_sources = [
             "snippets/deferred_check/deferred_mark_stage_a.c",
@@ -434,16 +474,7 @@ class SnippetLoadingTest(unittest.TestCase):
                         "-Wall",
                         "-Wextra",
                         "-Werror",
-                        "-O2",
-                        "-march=rv64gcv_zicbop",
-                        "-mabi=lp64d",
-                        "-mcmodel=medany",
-                        "-ffreestanding",
-                        "-fno-asynchronous-unwind-tables",
-                        "-fno-builtin",
-                        "-fno-stack-protector",
-                        "-fno-tree-vectorize",
-                        "-fno-tree-slp-vectorize",
+                        *toolchain.riscv_compile_flags(),
                         "-I",
                         str(ROOT / "runtime/include"),
                         "-I",
@@ -1281,6 +1312,88 @@ class SnippetLoadingTest(unittest.TestCase):
         self.assertTrue(plan["artifacts"]["bin"].endswith("build/scalar_load_legality_poc/test.bin"))
         self.assertTrue(plan["artifacts"]["build_manifest"].endswith("build/scalar_load_legality_poc/build_manifest.json"))
 
+    def test_mmu_suite_loads_rule_metadata_and_dump_plan(self) -> None:
+        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
+        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
+
+        suite = suite_loader.load_suite(ROOT / "suites/mmu_pilot_rules_poc.yaml")
+        plan = suite_loader.build_compose_plan(suite, snippet_db.load_snippet_db(ROOT))
+
+        self.assertEqual(
+            ("bare_identity", "sv39_alias", "superpage", "sfence_remap", "load_page_fault", "two_stage_fault"),
+            plan.mmu_rule_ids,
+        )
+        self.assertIn("requestor.hlv", plan.mmu_coverage_tags)
+        self.assertTrue(str(plan.mmu_rule_dir).endswith("snippets/mmu_rules/pilot"))
+
+        dump_result = subprocess.run(
+            ["python3", "generator/cli.py", "dump-plan", "suites/mmu_pilot_rules_poc.yaml"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(0, dump_result.returncode, msg=dump_result.stderr)
+        payload = json.loads(dump_result.stdout)
+        self.assertEqual("mmu_pilot_rules_poc", payload["suite"])
+        self.assertEqual(list(plan.mmu_rule_ids), payload["mmu"]["resolved_rule_ids"])
+        self.assertTrue(
+            payload["artifacts"]["generated_mmu_source"].endswith(
+                "build/mmu_pilot_rules_poc/generated_mmu_rule.c"
+            )
+        )
+
+    def test_suite_loader_rejects_mmu_metadata_without_mmu_runner(self) -> None:
+        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            suite_path = Path(tmpdir) / "mmu_without_runner.yaml"
+            suite_path.write_text(
+                textwrap.dedent(
+                    f"""
+                    suite: mmu_without_runner
+                    target: xiangshan-verilator
+                    seed: 17
+                    compose:
+                      mode: sequence
+                      snippets:
+                        - init_basic_env
+                        - finish_check
+                      mmu:
+                        rule_dir: {ROOT / "snippets" / "mmu_rules" / "pilot"}
+                        rule_ids:
+                          - bare_identity
+                    """
+                ).strip()
+            )
+
+            with self.assertRaisesRegex(ValueError, "compose.mmu requires mmu_rule_runner_main"):
+                suite_loader.load_suite(suite_path)
+
+    def test_mmu_subset_suite_coverage_tags_follow_selected_rules_only(self) -> None:
+        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
+        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
+
+        suite = suite_loader.load_suite(ROOT / "suites/mmu_bare_identity_poc.yaml")
+        plan = suite_loader.build_compose_plan(suite, snippet_db.load_snippet_db(ROOT))
+
+        self.assertEqual(("bare_identity",), plan.mmu_rule_ids)
+        self.assertEqual(("mode.bare", "page.identity", "requestor.load"), plan.mmu_coverage_tags)
+
+        dump_result = subprocess.run(
+            ["python3", "generator/cli.py", "dump-plan", "suites/mmu_bare_identity_poc.yaml"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(0, dump_result.returncode, msg=dump_result.stderr)
+        payload = json.loads(dump_result.stdout)
+        self.assertEqual(["bare_identity"], payload["mmu"]["resolved_rule_ids"])
+        self.assertEqual(["mode.bare", "page.identity", "requestor.load"], payload["mmu"]["coverage_tags"])
+        self.assertNotIn("guest.two_stage", payload["mmu"]["coverage_tags"])
+        self.assertNotIn("requestor.hlv", payload["mmu"]["coverage_tags"])
+
     def test_cli_lists_built_in_suite_pools(self) -> None:
         result = subprocess.run(
             ["python3", "generator/cli.py", "list-suite-pools"],
@@ -1340,12 +1453,16 @@ class SnippetLoadingTest(unittest.TestCase):
                 "store_split_templates",
                 "store_forward_overlap",
                 "cross_page_faults",
+                "store_forward_search",
+                "cross_page_fault_search",
             }
             valid_check_ids = {
                 "check_load_split_templates",
                 "check_store_split_templates",
                 "check_store_forward_overlap",
                 "check_cross_page_faults",
+                "check_store_forward_search",
+                "check_cross_page_fault_search",
             }
 
             for index, suite_entry in enumerate(payload["suites"]):
@@ -1360,6 +1477,8 @@ class SnippetLoadingTest(unittest.TestCase):
                 self.assertEqual("finish_check", plan.check_snippet_ids[-1])
                 self.assertEqual(6, len(plan.run_snippet_ids))
                 self.assertEqual(6, len(plan.check_snippet_ids))
+                self.assertEqual(5, len(set(plan.run_snippet_ids[1:])))
+                self.assertEqual(5, len(set(plan.check_snippet_ids[:-1])))
                 self.assertTrue(set(plan.run_snippet_ids[1:]).issubset(valid_run_ids))
                 self.assertTrue(set(plan.check_snippet_ids[:-1]).issubset(valid_check_ids))
                 self.assertGreater(len(plan.run_snippet_ids) + len(plan.check_snippet_ids), 10)
@@ -1413,6 +1532,42 @@ class SnippetLoadingTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("run_count 4 is below minimum 5", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
+
+    def test_generate_suites_allows_run_count_above_unique_pool_size_by_repeating_pool(self) -> None:
+        result = subprocess.run(
+            [
+                "python3",
+                "generator/cli.py",
+                "generate-suites",
+                "--pool",
+                "scalar_misalign_full",
+                "--count",
+                "1",
+                "--run-count",
+                "7",
+                "--seed",
+                "7",
+            ],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(0, result.returncode, msg=result.stderr)
+        index_path = Path(result.stdout.strip())
+        payload = json.loads(index_path.read_text())
+        suite_path = ROOT / payload["suites"][0]["path"]
+        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
+        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
+        plan = suite_loader.build_compose_plan(
+            suite_loader.load_suite(suite_path),
+            snippet_db.load_snippet_db(ROOT),
+        )
+
+        self.assertEqual(8, len(plan.run_snippet_ids))
+        self.assertEqual(7, len(plan.run_snippet_ids[1:]))
+        self.assertLess(len(set(plan.run_snippet_ids[1:])), len(plan.run_snippet_ids[1:]))
 
     def test_generate_suites_rejects_invalid_prefix_without_traceback(self) -> None:
         result = subprocess.run(
@@ -1549,6 +1704,7 @@ class SnippetLoadingTest(unittest.TestCase):
 
     def test_vsetvl_search_source_arms_periodic_timer_before_dense_loop(self) -> None:
         source = (ROOT / "snippets/vector_interrupt/vsetvl_interrupt_search.c").read_text()
+        helper = (ROOT / "snippets/include/xs_vsetvl_interrupt_path.h").read_text()
 
         self.assertEqual(1, source.count("xsrt_enable_stimer();"))
         self.assertEqual(1, source.count("xsrt_timer_arm_periodic_delta("))
@@ -1557,14 +1713,19 @@ class SnippetLoadingTest(unittest.TestCase):
         self.assertIn("#define XS_VSETVL_X4()", source)
         self.assertIn("#define XS_VSETVL_X8()", source)
         self.assertIn("XS_VSETVL_X8();", source)
+        self.assertIn("xs_vsetvl_emit_zero_zero_zero()", source)
+        self.assertIn("0x80007057", helper)
         self.assertIn('iterations = 256u + (unsigned long) ((env->seed >> 4) & 0x7fu);', source)
         self.assertIn('xsrt_timer_arm_periodic_delta(8u + (uint64_t) ((env->seed >> 13) & 0x7u));', source)
         self.assertNotIn("__riscv", source)
 
-    def test_vsetvl_path_source_uses_direct_vsetvl_without_local_arch_toggle(self) -> None:
+    def test_vsetvl_path_source_uses_raw_vsetvl_helper_without_local_arch_toggle(self) -> None:
         source = (ROOT / "snippets/vector_interrupt/vsetvl_interrupt_path.c").read_text()
+        helper = (ROOT / "snippets/include/xs_vsetvl_interrupt_path.h").read_text()
 
-        self.assertIn("vsetvl zero, zero, zero", source)
+        self.assertIn("xs_vsetvl_emit_zero_zero_zero();", source)
+        self.assertIn("vsetvl zero, zero, zero", helper)
+        self.assertIn(".word 0x80007057", helper)
         self.assertNotIn("__riscv", source)
 
     def test_runtime_entry_source_sets_fs_and_vs(self) -> None:

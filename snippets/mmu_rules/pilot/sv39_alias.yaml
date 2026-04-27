@@ -1,0 +1,30 @@
+id: sv39_alias
+requestor: load
+mode: host_single_stage
+setup:
+  mappings:
+    - name: rw_alias
+      kind: alias
+      va: 0xa00000000
+      pa: 0x80020000
+      perms: [r, w, a, d]
+    - name: ro_alias
+      kind: alias
+      va: 0x900000000
+      pa: 0x80020000
+      perms: [r, a, d]
+actions:
+  before_trigger:
+    - sfence_vma
+trigger:
+  op: store_then_load
+  store_va: rw_alias
+  load_va: ro_alias
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.load
+  - mode.host_single_stage
+  - page.alias

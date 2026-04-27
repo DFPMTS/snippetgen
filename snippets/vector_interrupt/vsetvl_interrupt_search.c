@@ -5,7 +5,7 @@
 #include "xs_vsetvl_interrupt_path.h"
 #include "xsrt_intr.h"
 
-#define XS_VSETVL_X1() __asm__ volatile("vsetvl zero, zero, zero" ::: "memory")
+#define XS_VSETVL_X1() xs_vsetvl_emit_zero_zero_zero()
 #define XS_VSETVL_X2() do { XS_VSETVL_X1(); XS_VSETVL_X1(); } while (0)
 #define XS_VSETVL_X4() do { XS_VSETVL_X2(); XS_VSETVL_X2(); } while (0)
 #define XS_VSETVL_X8() do { XS_VSETVL_X4(); XS_VSETVL_X4(); } while (0)

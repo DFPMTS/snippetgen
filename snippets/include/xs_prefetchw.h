@@ -23,7 +23,7 @@ enum {
   XS_PREFETCHW_FAIL_PREFETCH_TRAP = 203u,
 };
 
-#define XS_PREFETCHW_TARGET_ADDR ((uint64_t) 0x90000000ull)
+#define XS_PREFETCHW_TARGET_ADDR ((uint64_t) 0x40000000ull)
 
 extern volatile uint64_t xs_prefetchw_completed;
 extern volatile uint64_t xs_prefetchw_phase;

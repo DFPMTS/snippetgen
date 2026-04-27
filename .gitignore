@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .codex
 .humanize*
+.cache/
 build/*
 !build/.gitkeep
 *.vcd

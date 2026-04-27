@@ -14,15 +14,17 @@
 #define XSRT_TIMER_STATE_SCRATCH_A2 56
 #define XSRT_TIMER_STATE_SCRATCH_A3 64
 #define XSRT_ENV_FLAGS 32
-#define XSRT_ENV_INTERRUPT_COUNT 40
-#define XSRT_ENV_LAST_TRAP_CAUSE 48
-#define XSRT_ENV_LAST_TRAP_EPC 56
+#define XSRT_ENV_FINISH_CODE 40
+#define XSRT_ENV_INTERRUPT_COUNT 48
+#define XSRT_ENV_LAST_TRAP_CAUSE 56
+#define XSRT_ENV_LAST_TRAP_EPC 64
 #define XSRT_FLAG_TRAP_OBSERVED 32
 #define XSRT_MIE_MTIE 128
 #define XSRT_FRAME_EPC 0
 #define XSRT_FRAME_CAUSE 8
 #define XSRT_FRAME_TVAL 16
-#define XSRT_FRAME_GPR_BASE 24
+#define XSRT_FRAME_STATUS 24
+#define XSRT_FRAME_GPR_BASE 32
 #define XSRT_REGBYTES 8
 #define XSRT_FRAME_SIZE 288
 
@@ -59,6 +61,8 @@ xsrt_trap_entry_timer_done:
   add a2, a2, a1
   ld a1, XSRT_TIMER_STATE_MTIMECMP_ADDR(a0)
   sd a2, 0(a1)
+  ld a1, XSRT_TIMER_STATE_CTE_ACTIVE(a0)
+  bnez a1, xsrt_trap_entry_generic_restore
   j xsrt_trap_entry_timer_restore
 
 xsrt_trap_entry_timer_disable:
@@ -84,6 +88,7 @@ xsrt_trap_entry_generic_restore:
 xsrt_trap_entry_generic:
   addi sp, sp, -XSRT_FRAME_SIZE
 
+  XSRT_SAVE_REG(0, zero)
   XSRT_SAVE_REG(1, ra)
   XSRT_SAVE_REG(3, gp)
   XSRT_SAVE_REG(4, tp)
@@ -124,11 +129,15 @@ xsrt_trap_entry_generic:
   sd t0, XSRT_FRAME_CAUSE(sp)
   csrr t0, mtval
   sd t0, XSRT_FRAME_TVAL(sp)
+  csrr t0, mstatus
+  sd t0, XSRT_FRAME_STATUS(sp)
 
   mv a0, sp
   call xsrt_dispatch_strap
   mv sp, a0
 
+  ld t0, XSRT_FRAME_STATUS(sp)
+  csrw mstatus, t0
   ld t0, XSRT_FRAME_EPC(sp)
   csrw mepc, t0
 

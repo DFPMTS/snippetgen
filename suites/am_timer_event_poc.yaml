@@ -5,7 +5,6 @@ compose:
   mode: sequence
   snippets:
     - init_basic_env
-    - arm_timer
     - am_timer_event_main
     - check_interrupt_response
     - finish_check

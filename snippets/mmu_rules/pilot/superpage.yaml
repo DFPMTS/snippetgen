@@ -1,0 +1,22 @@
+id: superpage
+requestor: store
+mode: host_single_stage
+setup:
+  mappings:
+    - name: super_leaf
+      kind: superpage
+      va: 0x88000000
+      pa: 0x88000000
+      perms: [r, w, a, d]
+      page_count: 512
+trigger:
+  op: store
+  addr: super_leaf
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.store
+  - mode.host_single_stage
+  - page.superpage

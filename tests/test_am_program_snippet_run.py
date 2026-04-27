@@ -70,7 +70,11 @@ class AMProgramSnippetRunTest(unittest.TestCase):
             cmd[cmd.index("-c") + 1]
             for cmd in manifest["commands"]["compile"]
         ]
-        self.assertNotIn(str((ROOT / "snippets" / "programs" / "am_hello_main.c").resolve()), compile_sources)
+        self.assertIn(str((ROOT / "snippets" / "programs" / "am_hello_main.c").resolve()), compile_sources)
+        self.assertIn(
+            str((seed_dir / "generated_am_program_am_hello_main.c").resolve()),
+            compile_sources,
+        )
         self.assertIn(str((ROOT / "runtime" / "src" / "xsam_program_snippet.c").resolve()), compile_sources)
 
 

@@ -13,6 +13,11 @@ void xsam_putc(char ch) {
 }
 
 void xsam_halt(int code) {
+  if (code == 0) {
+    xsrt_finish_pass(xsrt_current_env());
+    XSRT_BAD_TRAP(0u);
+  }
+  xsrt_finish_fail(xsrt_current_env(), (uint64_t) code);
   XSRT_BAD_TRAP((uint64_t) code);
 }
 

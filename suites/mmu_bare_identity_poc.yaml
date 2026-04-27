@@ -1,0 +1,13 @@
+suite: mmu_bare_identity_poc
+target: xiangshan-verilator
+seed: 241024
+compose:
+  mode: sequence
+  snippets:
+    - init_basic_env
+    - mmu_rule_runner_main
+    - finish_check
+  mmu:
+    rule_dir: ../snippets/mmu_rules/pilot
+    rule_ids:
+      - bare_identity

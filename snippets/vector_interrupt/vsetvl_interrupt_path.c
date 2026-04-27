@@ -15,7 +15,7 @@ static int vsetvl_interrupt_path_run(xsrt_env_t *env) {
   iterations = 8u + (unsigned long) (env->seed & 0xfu);
 
   for (unsigned long index = 0; index < iterations; ++index) {
-    __asm__ volatile("vsetvl zero, zero, zero" ::: "memory");
+    xs_vsetvl_emit_zero_zero_zero();
   }
 
   env->snippet_id = XS_VSETVL_SNIPPET_MAGIC;

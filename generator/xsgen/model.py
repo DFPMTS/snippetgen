@@ -22,6 +22,10 @@ class SuiteSpec:
     snippet_ids: tuple[str, ...]
     run_snippet_ids: tuple[str, ...] | None = None
     check_snippet_ids: tuple[str, ...] | None = None
+    mmu_rule_dir: Path | None = None
+    mmu_rule_ids: tuple[str, ...] = ()
+    mmu_defined_rule_ids: tuple[str, ...] = ()
+    mmu_coverage_tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -33,6 +37,10 @@ class ComposePlan:
     snippets: tuple[SnippetSpec, ...]
     run_snippet_ids: tuple[str, ...] | None = None
     check_snippet_ids: tuple[str, ...] | None = None
+    mmu_rule_dir: Path | None = None
+    mmu_rule_ids: tuple[str, ...] = ()
+    mmu_defined_rule_ids: tuple[str, ...] = ()
+    mmu_coverage_tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -44,6 +52,9 @@ class BuildArtifact:
     bin_path: Path | None = None
     disasm_path: Path | None = None
     build_manifest_path: Path | None = None
+    generated_mmu_header_path: Path | None = None
+    generated_mmu_source_path: Path | None = None
+    mmu_coverage_ledger_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -87,6 +98,7 @@ class RunEntry:
     notes: str
     returncode: int | None = None
     finish_code: int | None = None
+    mmu_coverage_ledger_path: Path | None = None
 
 
 @dataclass(frozen=True)

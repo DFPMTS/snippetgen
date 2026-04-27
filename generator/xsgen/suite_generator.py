@@ -41,12 +41,16 @@ SCALAR_MISALIGN_FULL_POOL = SuitePool(
         "store_split_templates",
         "store_forward_overlap",
         "cross_page_faults",
+        "store_forward_search",
+        "cross_page_fault_search",
     ),
     check_map={
         "load_split_templates": "check_load_split_templates",
         "store_split_templates": "check_store_split_templates",
         "store_forward_overlap": "check_store_forward_overlap",
         "cross_page_faults": "check_cross_page_faults",
+        "store_forward_search": "check_store_forward_search",
+        "cross_page_fault_search": "check_cross_page_fault_search",
     },
     default_run_count=5,
     min_run_count=5,
@@ -120,6 +124,8 @@ def generate_suites(
         raise ValueError(f"generator_seed must be non-negative: {generator_seed}")
     if not pool.run_pool:
         raise ValueError(f"run_pool must not be empty for {pool.name}")
+    if len(set(pool.run_pool)) != len(pool.run_pool):
+        raise ValueError(f"run_pool contains duplicate snippet ids for {pool.name}")
 
     rng = random.Random(generator_seed)
     generated: list[GeneratedSuite] = []

@@ -33,7 +33,7 @@ enum {
 };
 
 enum {
-  XSAM_PROT_NONE = 0x1,
+  XSAM_PROT_NONE = 0x0,
   XSAM_PROT_READ = 0x2,
   XSAM_PROT_WRITE = 0x4,
   XSAM_PROT_EXEC = 0x8,

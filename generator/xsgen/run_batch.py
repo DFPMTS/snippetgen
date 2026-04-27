@@ -7,6 +7,7 @@ import json
 import uuid
 
 from generator.xsgen.emitter import emit_harness
+from generator.xsgen.mmu_rule_emitter import mark_mmu_coverage_ledger_ran
 from generator.xsgen.model import BuildArtifact, ComposePlan, RunEntry, RunLedger, RunSeedArtifacts, TargetRunResult
 from generator.xsgen.run_target import load_run_target
 from generator.xsgen.snippet_db import load_snippet_db
@@ -111,6 +112,11 @@ def _entry_payload(entry: RunEntry) -> dict:
         "notes": entry.notes,
         "returncode": entry.returncode,
         "finish_code": entry.finish_code,
+        "mmu_coverage_ledger": (
+            str(entry.mmu_coverage_ledger_path)
+            if entry.mmu_coverage_ledger_path is not None
+            else None
+        ),
     }
 
 
@@ -118,11 +124,53 @@ def _write_run_meta(entry: RunEntry) -> None:
     entry.run_meta_path.write_text(json.dumps(_entry_payload(entry), indent=2, sort_keys=True))
 
 
+def _mmu_ran_rule_ids(
+    *,
+    prepared: _PreparedSeedRun,
+    target_result: TargetRunResult,
+) -> tuple[str, ...]:
+    code: int | None
+    partial_count: int
+
+    if not prepared.plan.mmu_rule_ids:
+        return ()
+    if target_result.finish_code == 0 or "good_trap" in target_result.labels:
+        return prepared.plan.mmu_rule_ids
+
+    code = target_result.finish_code
+    if code is None:
+        return ()
+
+    partial_count = code - 64
+    if partial_count < 0 or partial_count > len(prepared.plan.mmu_rule_ids):
+        return ()
+    return prepared.plan.mmu_rule_ids[:partial_count]
+
+
 def _completed_entry(
     *,
     prepared: _PreparedSeedRun,
     target_result: TargetRunResult,
 ) -> RunEntry:
+    mmu_coverage_ledger_path = (
+        prepared.artifact.mmu_coverage_ledger_path
+        if prepared.plan.mmu_rule_ids
+        else None
+    )
+    ran_rule_ids = _mmu_ran_rule_ids(prepared=prepared, target_result=target_result)
+    semantic_success = (
+        target_result.finish_code == 0
+        or "good_trap" in target_result.labels
+    )
+    if (
+        mmu_coverage_ledger_path is not None
+        and mmu_coverage_ledger_path.is_file()
+        and (semantic_success or ran_rule_ids)
+    ):
+        mark_mmu_coverage_ledger_ran(
+            mmu_coverage_ledger_path,
+            ran_rule_ids=ran_rule_ids,
+        )
     return RunEntry(
         suite_name=prepared.plan.suite_name,
         target=prepared.plan.target,
@@ -141,6 +189,7 @@ def _completed_entry(
         notes=target_result.notes,
         returncode=target_result.returncode,
         finish_code=target_result.finish_code,
+        mmu_coverage_ledger_path=mmu_coverage_ledger_path,
     )
 
 

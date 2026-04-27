@@ -21,6 +21,21 @@ enum {
   XSAM_VME_PAGE_SIZE = 4096u,
 };
 
+static uintptr_t xsam_vme_mapping_size(const xsam_vme_mapping_t *mapping) {
+  uintptr_t size;
+  int level;
+
+  if (mapping == 0) {
+    return 0u;
+  }
+
+  size = XSAM_VME_PAGE_SIZE;
+  for (level = 0; level < mapping->level; ++level) {
+    size *= 512u;
+  }
+  return size;
+}
+
 static void *(*g_pgalloc)(size_t size);
 static void (*g_pgfree)(void *ptr);
 static int g_vme_enabled;
@@ -88,6 +103,13 @@ static void xsam_vme_record(
 }
 
 int xsam_vme_init(void *(*pgalloc)(size_t size), void (*pgfree)(void *)) {
+  if (pgalloc == 0 || pgfree == 0) {
+    g_pgalloc = 0;
+    g_pgfree = 0;
+    g_vme_enabled = 0;
+    return -1;
+  }
+
   g_pgalloc = pgalloc;
   g_pgfree = pgfree;
   g_vme_enabled = 1;
@@ -162,6 +184,9 @@ int xsam_vme_lookup(
     int *level_out) {
   xsam_vme_root_t *root;
   xsam_vme_mapping_t *mapping;
+  uintptr_t mapping_end;
+  uintptr_t mapping_size;
+  uintptr_t offset;
   uintptr_t target_va;
 
   root = xsam_vme_root(as);
@@ -172,9 +197,12 @@ int xsam_vme_lookup(
   target_va = (uintptr_t) va;
   mapping = root->head;
   while (mapping != 0) {
-    if (mapping->va == target_va) {
+    mapping_size = xsam_vme_mapping_size(mapping);
+    mapping_end = mapping->va + mapping_size;
+    if (mapping_size != 0u && target_va >= mapping->va && target_va < mapping_end) {
+      offset = target_va - mapping->va;
       if (pa_out != 0) {
-        *pa_out = (void *) mapping->pa;
+        *pa_out = (void *) (mapping->pa + offset);
       }
       if (prot_out != 0) {
         *prot_out = mapping->prot;

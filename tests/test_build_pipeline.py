@@ -1,6 +1,7 @@
 from pathlib import Path
 import importlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -16,6 +17,17 @@ if str(ROOT) not in sys.path:
 
 
 class BuildPipelineTest(unittest.TestCase):
+    def assert_or_skip_for_toolchain(self, result: subprocess.CompletedProcess[str]) -> None:
+        if result.returncode == 0:
+            return
+        stderr = result.stderr or ""
+        if (
+            "unknown z ISA extension `zicbop'" in stderr
+            or "cannot find default versions of the ISA extension `v'" in stderr
+        ):
+            self.skipTest("installed RISC-V toolchain lacks XiangShan ISA extensions")
+        self.assertEqual(0, result.returncode, msg=stderr)
+
     def setUp(self) -> None:
         self.build_dir = ROOT / "build" / "scalar_load_legality_poc"
         self.deferred_check_markers_build_dir = ROOT / "build" / "deferred_check_markers_poc"
@@ -51,6 +63,9 @@ class BuildPipelineTest(unittest.TestCase):
         self.nexus_memscan_hugepage_atom_fault_build_dir = ROOT / "build" / "nexus_memscan_hugepage_atom_fault_poc"
         self.nexus_memscan_hugepage_build_dir = ROOT / "build" / "nexus_memscan_hugepage_poc"
         self.nexus_memscan_page_fault_build_dir = ROOT / "build" / "nexus_memscan_page_fault_poc"
+        self.mmu_pilot_build_dir = ROOT / "build" / "mmu_pilot_rules_poc"
+        self.mmu_bare_identity_build_dir = ROOT / "build" / "mmu_bare_identity_poc"
+        self.mmu_missing_rule_build_dir = ROOT / "build" / "mmu_missing_rule"
         if self.build_dir.exists():
             shutil.rmtree(self.build_dir)
         if self.deferred_check_markers_build_dir.exists():
@@ -119,6 +134,12 @@ class BuildPipelineTest(unittest.TestCase):
             shutil.rmtree(self.nexus_memscan_hugepage_build_dir)
         if self.nexus_memscan_page_fault_build_dir.exists():
             shutil.rmtree(self.nexus_memscan_page_fault_build_dir)
+        if self.mmu_pilot_build_dir.exists():
+            shutil.rmtree(self.mmu_pilot_build_dir)
+        if self.mmu_bare_identity_build_dir.exists():
+            shutil.rmtree(self.mmu_bare_identity_build_dir)
+        if self.mmu_missing_rule_build_dir.exists():
+            shutil.rmtree(self.mmu_missing_rule_build_dir)
 
     def test_emitter_generates_harness_in_suite_order(self) -> None:
         emitter = importlib.import_module("generator.xsgen.emitter")
@@ -225,6 +246,39 @@ class BuildPipelineTest(unittest.TestCase):
                 ValueError,
                 "run_snippet_ids and check_snippet_ids must both be set or both be None",
             ):
+                emitter.emit_harness(plan, output_path)
+
+    def test_emitter_rejects_am_programs_in_check_phase(self) -> None:
+        emitter = importlib.import_module("generator.xsgen.emitter")
+        model = importlib.import_module("generator.xsgen.model")
+
+        plan = model.ComposePlan(
+            suite_name="am_program_check_phase",
+            target="xiangshan-verilator",
+            seed=1,
+            snippet_ids=("init_basic_env", "demo_program"),
+            snippets=(
+                model.SnippetSpec(
+                    id="init_basic_env",
+                    kind="proc",
+                    lang="c",
+                    sources=(),
+                ),
+                model.SnippetSpec(
+                    id="demo_program",
+                    kind="am_program",
+                    lang="c",
+                    sources=(ROOT / "snippets" / "programs" / "am_hello_main.c",),
+                    entry="main",
+                ),
+            ),
+            run_snippet_ids=("init_basic_env",),
+            check_snippet_ids=("demo_program",),
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "generated_suite.c"
+            with self.assertRaisesRegex(ValueError, "check_snippets cannot include am_program"):
                 emitter.emit_harness(plan, output_path)
 
     def test_suite_reorder_changes_generated_harness_order(self) -> None:
@@ -369,6 +423,21 @@ class BuildPipelineTest(unittest.TestCase):
             self.assertIn("xsrt_run_snippet_check_only(&env, &snippet_finish_check);", generated_text)
             self.assertNotIn("xsrt_run_snippet(&env,", generated_text)
             self.assertEqual(1, generated_text.count("extern const xsrt_snippet_desc_t snippet_arm_timer;"))
+
+            manifest = json.loads(
+                (self.deferred_check_markers_build_dir / "build_manifest.json").read_text()
+            )
+            self.assertEqual(
+                ["init_basic_env", "arm_timer", "finish_check"],
+                manifest["run_snippet_ids"],
+            )
+            self.assertEqual(
+                ["arm_timer", "finish_check"],
+                manifest["check_snippet_ids"],
+            )
+            self.assertNotIn("generated_mmu_header", manifest["artifacts"])
+            self.assertNotIn("generated_mmu_source", manifest["artifacts"])
+            self.assertNotIn("mmu_coverage_ledger", manifest["artifacts"])
 
     def test_vsetvl_suite_build_generates_artifacts_and_manifest(self) -> None:
         result = subprocess.run(
@@ -585,7 +654,11 @@ class BuildPipelineTest(unittest.TestCase):
             cmd[cmd.index("-c") + 1]
             for cmd in manifest["commands"]["compile"]
         ]
-        self.assertNotIn(str((ROOT / "snippets" / "programs" / "am_hello_main.c").resolve()), compile_sources)
+        self.assertIn(str((ROOT / "snippets" / "programs" / "am_hello_main.c").resolve()), compile_sources)
+        self.assertIn(
+            str((self.am_program_build_dir / "generated_am_program_am_hello_main.c").resolve()),
+            compile_sources,
+        )
         self.assertIn(str(generated_suite), compile_sources)
         self.assertIn(str((ROOT / "runtime" / "src" / "xsam_program_snippet.c").resolve()), compile_sources)
 
@@ -614,12 +687,11 @@ class BuildPipelineTest(unittest.TestCase):
         manifest = json.loads(build_manifest.read_text())
         self.assertEqual("am_timer_event_poc", manifest["suite"])
         self.assertEqual(
-            ["init_basic_env", "arm_timer", "am_timer_event_main", "check_interrupt_response", "finish_check"],
+            ["init_basic_env", "am_timer_event_main", "check_interrupt_response", "finish_check"],
             manifest["snippet_ids"],
         )
 
         generated_text = generated_suite.read_text()
-        self.assertIn("snippet_arm_timer", generated_text)
         self.assertIn("snippet_am_timer_event_main", generated_text)
         self.assertIn("snippet_check_interrupt_response", generated_text)
         self.assertIn("xsam_program_entry_am_timer_event_main", generated_text)
@@ -1106,6 +1178,112 @@ class BuildPipelineTest(unittest.TestCase):
         )
         self.assertIn("xsam_program_entry_nexus_memscan_page_fault_main", generated_suite.read_text())
 
+    def test_mmu_pilot_suite_build_generates_rule_artifacts_manifest_and_ledger(self) -> None:
+        result = subprocess.run(
+            ["python3", "generator/cli.py", "build", "suites/mmu_pilot_rules_poc.yaml"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assert_or_skip_for_toolchain(result)
+
+        generated_suite = self.mmu_pilot_build_dir / "generated_suite.c"
+        generated_mmu_source = self.mmu_pilot_build_dir / "generated_mmu_rule.c"
+        generated_mmu_header = self.mmu_pilot_build_dir / "generated_mmu_rule.h"
+        build_manifest = self.mmu_pilot_build_dir / "build_manifest.json"
+        coverage_ledger = self.mmu_pilot_build_dir / "mmu_coverage_ledger.json"
+
+        self.assertTrue(generated_suite.is_file())
+        self.assertTrue(generated_mmu_source.is_file())
+        self.assertTrue(generated_mmu_header.is_file())
+        self.assertTrue(build_manifest.is_file())
+        self.assertTrue(coverage_ledger.is_file())
+
+        manifest = json.loads(build_manifest.read_text())
+        self.assertEqual("mmu_pilot_rules_poc", manifest["suite"])
+        self.assertEqual(
+            [
+                "bare_identity",
+                "sv39_alias",
+                "superpage",
+                "sfence_remap",
+                "load_page_fault",
+                "two_stage_fault",
+            ],
+            manifest["mmu"]["resolved_rule_ids"],
+        )
+        self.assertTrue(
+            manifest["artifacts"]["generated_mmu_source"].endswith(
+                "build/mmu_pilot_rules_poc/generated_mmu_rule.c"
+            )
+        )
+        self.assertIn(str((ROOT / "runtime" / "src" / "xsam_mmu.c").resolve()), manifest["runtime_sources"])
+        self.assertIn(str((ROOT / "runtime" / "src" / "xsam_mmu_fault.c").resolve()), manifest["runtime_sources"])
+        self.assertIn(str((ROOT / "runtime" / "src" / "xsam_mmu_guest.c").resolve()), manifest["runtime_sources"])
+        self.assertIn("xsam_program_entry_mmu_rule_runner_main", generated_suite.read_text())
+        self.assertIn("xs_generated_rule_two_stage_fault", generated_mmu_source.read_text())
+
+        ledger = json.loads(coverage_ledger.read_text())
+        rule_states = {entry["id"]: entry["state"] for entry in ledger["rules"]}
+        self.assertEqual("generated_not_run", rule_states["bare_identity"])
+        self.assertEqual("generated_not_run", rule_states["two_stage_fault"])
+        tag_states = {entry["tag"]: entry["state"] for entry in ledger["coverage_tags"]}
+        self.assertEqual("generated_not_run", tag_states["guest.two_stage"])
+
+    def test_mmu_build_rejects_unknown_rule_ids_before_emitting_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            suite_path = Path(tmpdir) / "mmu_missing_rule.yaml"
+            suite_path.write_text(
+                textwrap.dedent(
+                    """
+                    suite: mmu_missing_rule
+                    target: xiangshan-verilator
+                    seed: 7
+                    compose:
+                      mode: sequence
+                      snippets:
+                        - init_basic_env
+                        - mmu_rule_runner_main
+                        - finish_check
+                      mmu:
+                        rule_dir: /nfs/home/liujunqi/XS/snippetgen/snippets/mmu_rules/pilot
+                        rule_ids:
+                          - bare_identity
+                          - missing_rule
+                    """
+                ).strip()
+            )
+            result = subprocess.run(
+                ["python3", "generator/cli.py", "build", str(suite_path)],
+                cwd=ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("unknown MMU rule id in suite", result.stderr)
+        self.assertFalse((self.mmu_missing_rule_build_dir / "build_manifest.json").exists())
+
+    def test_mmu_subset_build_manifest_uses_selected_rule_coverage_tags_only(self) -> None:
+        result = subprocess.run(
+            ["python3", "generator/cli.py", "build", "suites/mmu_bare_identity_poc.yaml"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assert_or_skip_for_toolchain(result)
+
+        manifest = json.loads((self.mmu_bare_identity_build_dir / "build_manifest.json").read_text())
+        self.assertEqual("mmu_bare_identity_poc", manifest["suite"])
+        self.assertEqual(["bare_identity"], manifest["mmu"]["resolved_rule_ids"])
+        self.assertEqual(["mode.bare", "page.identity", "requestor.load"], manifest["mmu"]["coverage_tags"])
+        self.assertEqual(["mode.bare", "page.identity", "requestor.load"], manifest["mmu"]["emitted_coverage_tags"])
+        self.assertNotIn("guest.two_stage", manifest["mmu"]["coverage_tags"])
+        self.assertNotIn("requestor.hlv", manifest["mmu"]["coverage_tags"])
+
     def test_vsetvl_suite_harness_order_and_final_elf_contains_vsetvl(self) -> None:
         emitter = importlib.import_module("generator.xsgen.emitter")
         snippet_db = importlib.import_module("generator.xsgen.snippet_db")
@@ -1151,7 +1329,7 @@ class BuildPipelineTest(unittest.TestCase):
             text=True,
         )
         self.assertEqual(0, loop_result.returncode, msg=loop_result.stderr)
-        self.assertIn("vsetvl\tzero,zero,zero", loop_result.stdout)
+        self.assertRegex(loop_result.stdout, r"(vsetvl\tzero,zero,zero|0x80007057)")
 
     def test_runtime_entry_emits_noop_halt_trap_after_main_returns(self) -> None:
         snippet_db = importlib.import_module("generator.xsgen.snippet_db")
@@ -1188,7 +1366,7 @@ class BuildPipelineTest(unittest.TestCase):
         )
         halt_index = next(
             index for index, instruction in enumerate(instructions)
-            if instruction == ".word\t0x0005006b"
+            if instruction == ".word\t0x0005006b" or instruction.endswith("0x5006b")
         )
         self.assertLess(call_index, halt_index)
 
@@ -1258,7 +1436,7 @@ class BuildPipelineTest(unittest.TestCase):
             text=True,
         )
         self.assertEqual(0, disasm_result.returncode, msg=disasm_result.stderr)
-        self.assertIn("vsetvl\tzero,zero,zero", disasm_result.stdout)
+        self.assertRegex(disasm_result.stdout, r"(vsetvl\tzero,zero,zero|0x80007057)")
 
     def test_split_store_search_suite_final_elf_contains_split_store_and_aligned_loads(self) -> None:
         snippet_db = importlib.import_module("generator.xsgen.snippet_db")
@@ -1327,7 +1505,7 @@ class BuildPipelineTest(unittest.TestCase):
             capture_output=True,
             text=True,
         )
-        self.assertEqual(0, result.returncode, msg=result.stderr)
+        self.assert_or_skip_for_toolchain(result)
 
         generated_suite = self.prefetchw_build_dir / "generated_suite.c"
         test_elf = self.prefetchw_build_dir / "test.elf"
@@ -1355,7 +1533,14 @@ class BuildPipelineTest(unittest.TestCase):
         self.assertTrue(manifest["commands"]["compile"])
         self.assertTrue(manifest["commands"]["link"])
         self.assertTrue(manifest["commands"]["objcopy"])
-        self.assertTrue(any("-march=rv64gcv_zicbop" in command for command in manifest["commands"]["compile"]))
+        compile_flags = {
+            arg
+            for command in manifest["commands"]["compile"]
+            for arg in command
+        }
+        self.assertIn("-march=rv64gc", compile_flags)
+        self.assertNotIn("-march=rv64gcv_zicbop", compile_flags)
+        self.assertIn("0037e013", disasm.read_text())
 
     def test_prefetchw_tl_denied_fault_suite_final_elf_contains_load_then_prefetch_pair(self) -> None:
         snippet_db = importlib.import_module("generator.xsgen.snippet_db")
@@ -1367,7 +1552,24 @@ class BuildPipelineTest(unittest.TestCase):
         plan = suite_loader.build_compose_plan(suite, snippet_db.load_snippet_db(ROOT))
         artifact = toolchain.artifact_paths_for_suite(ROOT, suite.name)
         emitter.emit_harness(plan, artifact.generated_suite_path)
-        toolchain.build_artifacts(ROOT, plan, artifact)
+        try:
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "SNIPPETGEN_RISCV_MARCH": "rv64gcv_zicbop",
+                    "SNIPPETGEN_RISCV_MABI": "lp64d",
+                },
+                clear=False,
+            ):
+                toolchain.build_artifacts(ROOT, plan, artifact)
+        except RuntimeError as exc:
+            stderr = str(exc)
+            if (
+                "unknown z ISA extension `zicbop'" in stderr
+                or "cannot find default versions of the ISA extension `v'" in stderr
+            ):
+                self.skipTest("installed RISC-V toolchain lacks XiangShan ISA extensions")
+            raise
 
         disasm_result = subprocess.run(
             [
@@ -1436,6 +1638,68 @@ class BuildPipelineTest(unittest.TestCase):
             )
 
             self.assertEqual(str(objdump_path), resolved)
+
+    def test_compile_flags_allow_local_isa_override(self) -> None:
+        toolchain = importlib.import_module("generator.xsgen.toolchain")
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SNIPPETGEN_RISCV_MARCH": "rv64gc",
+                "SNIPPETGEN_RISCV_MABI": "lp64d",
+            },
+            clear=False,
+        ):
+            flags = toolchain.riscv_compile_flags()
+
+        self.assertIn("-march=rv64gc", flags)
+        self.assertIn("-mabi=lp64d", flags)
+
+    def test_compile_flags_default_to_portable_rv64gc(self) -> None:
+        toolchain = importlib.import_module("generator.xsgen.toolchain")
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            flags = toolchain.riscv_compile_flags()
+
+        self.assertIn("-march=rv64gc", flags)
+        self.assertNotIn("-march=rv64gcv_zicbop", flags)
+
+    def test_local_isa_override_build_keeps_reset_vector_at_pmem_base(self) -> None:
+        fallback_gcc = Path("/usr/bin/riscv64-linux-gnu-gcc")
+        fallback_objcopy = Path("/usr/bin/riscv64-linux-gnu-objcopy")
+        if not fallback_gcc.is_file() or not fallback_objcopy.is_file():
+            self.skipTest("local fallback GNU toolchain is unavailable")
+
+        env = dict(os.environ)
+        env.update(
+            {
+                "riscv64-unknown-linux-gnu-gcc": str(fallback_gcc),
+                "riscv64-unknown-linux-gnu-objcopy": str(fallback_objcopy),
+                "SNIPPETGEN_RISCV_MARCH": "rv64gc",
+                "SNIPPETGEN_RISCV_MABI": "lp64d",
+            }
+        )
+
+        result = subprocess.run(
+            ["python3", "generator/cli.py", "build", "suites/am_hello_main_poc.yaml"],
+            cwd=ROOT,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(0, result.returncode, msg=result.stderr)
+
+        readelf_result = subprocess.run(
+            ["readelf", "-h", "-l", str(self.am_program_build_dir / "test.elf")],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(0, readelf_result.returncode, msg=readelf_result.stderr)
+        self.assertIn("Entry point address:               0x80000000", readelf_result.stdout)
+        self.assertNotIn(".note.gnu.build-id", readelf_result.stdout)
 
     def test_missing_descriptor_causes_build_failure(self) -> None:
         emitter = importlib.import_module("generator.xsgen.emitter")

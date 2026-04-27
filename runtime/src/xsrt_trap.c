@@ -1,5 +1,7 @@
 #include "xsrt_trap.h"
 
+#include "xsrt_intr.h"
+
 static xsrt_trap_scratch_t g_sync_trap_scratch;
 static xsrt_trap_handler_t g_s_trap_handler;
 
@@ -23,7 +25,9 @@ void xsrt_reset_mscratch_for_sync_traps(void) {
 
 void xsrt_install_strap(xsrt_trap_handler_t fn) {
   g_s_trap_handler = fn;
-  xsrt_reset_mscratch_for_sync_traps();
+  if (xsrt_timer_trap_state_active() == 0) {
+    xsrt_reset_mscratch_for_sync_traps();
+  }
   __asm__ volatile("csrw mtvec, %0" : : "r"(&xsrt_trap_entry) : "memory");
 }
 

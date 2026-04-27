@@ -10,6 +10,7 @@ struct xsrt_trap_frame {
   uint64_t epc;
   uint64_t cause;
   uint64_t tval;
+  uint64_t status;
   uint64_t gpr[32];
 };
 

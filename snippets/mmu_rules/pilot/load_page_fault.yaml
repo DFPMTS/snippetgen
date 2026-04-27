@@ -1,0 +1,26 @@
+id: load_page_fault
+requestor: load
+mode: host_single_stage
+setup:
+  mappings:
+    - name: fault_page
+      va: 0xb00000000
+      pa: 0x80022000
+      perms: [r, a]
+      fault: true
+actions:
+  handler:
+    - repair_fault_mapping
+  post_check:
+    - record_fault_snapshot
+trigger:
+  op: load
+  addr: fault_page
+expect:
+  result: page_fault
+observe:
+  - fault_cause_match
+coverage_tags:
+  - requestor.load
+  - mode.host_single_stage
+  - exception.page_fault

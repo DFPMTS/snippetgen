@@ -9,9 +9,9 @@ import subprocess
 from generator.xsgen.model import TargetRunResult
 
 
-DEFAULT_MAX_CYCLES = 20000
-DEFAULT_MAX_INSTR = 20000
-DEFAULT_TIMEOUT_SEC = 120
+DEFAULT_MAX_CYCLES = 120000
+DEFAULT_MAX_INSTR = 120000
+DEFAULT_TIMEOUT_SEC = 1800
 DEFAULT_FORK_INTERVAL_SEC = 10
 UNKNOWN_TRAP_CODE_RE = re.compile(r"Unknown trap code:\s*(\d+)")
 

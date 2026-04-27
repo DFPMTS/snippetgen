@@ -1,0 +1,26 @@
+id: sfence_remap
+requestor: load
+mode: host_single_stage
+setup:
+  mappings:
+    - name: remap_alias
+      kind: alias
+      va: 0xa00001000
+      pa: 0x80021000
+      perms: [r, a]
+actions:
+  before_trigger:
+    - remap_alias
+    - sfence_vma
+trigger:
+  op: remap_then_load
+  addr: remap_alias
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.load
+  - mode.host_single_stage
+  - page.alias
+  - ctrl.sfence

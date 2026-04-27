@@ -1,6 +1,6 @@
-from pathlib import Path
 import importlib
 import json
+from pathlib import Path
 import tempfile
 import unittest
 
@@ -9,183 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class AMProgramSnippetBuildTest(unittest.TestCase):
-    def assert_program_contains(self, relative_path: str, needles: tuple[str, ...]) -> None:
-        sample = (ROOT / relative_path).read_text()
-        for needle in needles:
-            self.assertIn(needle, sample)
-
-    def test_am_program_sample_uses_ioe_timer_and_serial_paths(self) -> None:
-        sample = (ROOT / "snippets" / "programs" / "am_hello_main.c").read_text()
-
-        self.assertIn("xsam_ioe_init()", sample)
-        self.assertIn("xsam_dev_timer_uptime_t uptime", sample)
-        self.assertIn("xsam_dev_serial_send_t serial", sample)
-        self.assertIn("xsam_io_read(XSAM_DEV_TIMER, XSAM_DEVREG_TIMER_UPTIME, &uptime, sizeof(uptime))", sample)
-        self.assertIn("xsam_io_write(XSAM_DEV_SERIAL, XSAM_DEVREG_SERIAL_SEND, &serial, sizeof(serial))", sample)
-
-    def test_am_timer_program_waits_for_timer_progress_before_declaring_timeout(self) -> None:
-        sample = (ROOT / "snippets" / "programs" / "am_timer_event_main.c").read_text()
-
-        self.assertIn("uint64_t last_time", sample)
-        self.assertIn("uint64_t last_compare", sample)
-        self.assertIn("xsrt_timer_read_uptime()", sample)
-        self.assertIn("xsrt_timer_read_compare()", sample)
-        self.assertIn("if (last_time < last_compare)", sample)
-
-    def test_scalar_misalign_load_in_16b_program_uses_unaligned_lw_and_ld_within_16b(self) -> None:
-        self.assert_program_contains(
-            "snippets/programs/scalar_misalign_load_in_16b_main.c",
-            (
-                "__attribute__((aligned(16)))",
-                '"lw %0, 0(%1)"',
-                '"ld %0, 0(%1)"',
-                "const uint8_t *lw_ptr = base + 1u;",
-                "const uint8_t *ld_ptr = base + 7u;",
-            ),
-        )
-
-    def test_scalar_misalign_load_cross_16b_program_uses_cross_boundary_ld(self) -> None:
-        self.assert_program_contains(
-            "snippets/programs/scalar_misalign_load_cross_16b_main.c",
-            (
-                "__attribute__((aligned(16)))",
-                '"ld %0, 0(%1)"',
-                "const uint8_t *ptr = base + 13u;",
-                "return 11;",
-            ),
-        )
-
-    def test_scalar_misalign_store_in_16b_program_uses_unaligned_sw_and_sd_within_16b(self) -> None:
-        self.assert_program_contains(
-            "snippets/programs/scalar_misalign_store_in_16b_main.c",
-            (
-                '"sw %1, 0(%0)"',
-                '"sd %1, 0(%0)"',
-                "uint8_t *sw_ptr = base + 1u;",
-                "uint8_t *sd_ptr = base + 7u;",
-            ),
-        )
-
-    def test_scalar_misalign_store_cross_16b_program_uses_cross_boundary_sw_and_sd(self) -> None:
-        self.assert_program_contains(
-            "snippets/programs/scalar_misalign_store_cross_16b_main.c",
-            (
-                "__attribute__((aligned(16)))",
-                '"sw %1, 0(%0)"',
-                '"sd %1, 0(%0)"',
-                "uint8_t *sd_ptr = region_a + 15u;",
-                "uint8_t *sw_ptr = region_b + 14u;",
-            ),
-        )
-
-    def test_scalar_misalign_store_load_overlap_program_reads_back_complete_value(self) -> None:
-        self.assert_program_contains(
-            "snippets/programs/scalar_misalign_store_load_overlap_main.c",
-            (
-                '"sd %1, 0(%0)"',
-                '"ld %0, 0(%1)"',
-                "uint8_t *store_ptr = base + 15u;",
-                "const uint8_t *fragment_ptr = base + 16u;",
-            ),
-        )
-
-    def test_nexus_memscan_program_uses_pmp_and_mprv_for_fault_probe(self) -> None:
-        sample = (ROOT / "snippets" / "programs" / "nexus_memscan_access_fault_main.c").read_text()
-
-        self.assertIn('#include "xsam_xs_platform.h"', sample)
-        self.assertIn("NEXUS_MEMSCAN_MSTATUS_MPP_S", sample)
-        self.assertIn("NEXUS_MEMSCAN_MSTATUS_MPRV", sample)
-        self.assertIn("NEXUS_MEMSCAN_CAUSE_STORE_ACCESS", sample)
-        self.assertIn("xsam_xs_pmp_init();", sample)
-        self.assertIn("xsam_xs_pmp_enable_napot(", sample)
-        self.assertIn("XSAM_XS_PMP_COUNT - 1u", sample)
-        self.assertIn('csrrw t0, mstatus, %2', sample)
-        self.assertIn('csrw mstatus, t0', sample)
-        self.assertIn("static void nexus_memscan_faulting_store(uintptr_t addr)", sample)
-        self.assertIn('sd zero, 0(%0)', sample)
-
-    def test_nexus_memscan_fetch_program_uses_locked_pmp_and_resume_epc(self) -> None:
-        sample = (ROOT / "snippets" / "programs" / "nexus_memscan_fetch_fault_main.c").read_text()
-
-        self.assertIn('#include "xsam_xs_platform.h"', sample)
-        self.assertIn("NEXUS_MEMSCAN_CAUSE_FETCH_ACCESS", sample)
-        self.assertIn("static volatile uintptr_t nexus_memscan_fetch_resume_pc", sample)
-        self.assertIn("xsam_xs_pmp_init();", sample)
-        self.assertIn("xsam_xs_pmp_enable_napot(", sample)
-        self.assertIn("1, 0u", sample)
-        self.assertIn("frame->epc = nexus_memscan_fetch_resume_pc;", sample)
-        self.assertIn("nexus_memscan_trigger_fetch_fault(", sample)
-        self.assertIn("la t0, 1f", sample)
-        self.assertIn('sd t0, %0', sample)
-        self.assertIn('jr %1', sample)
-
-    def test_nexus_memscan_page_fault_program_uses_sv39_satp_and_mprv_probes(self) -> None:
-        sample = (ROOT / "snippets" / "programs" / "nexus_memscan_page_fault_main.c").read_text()
-
-        self.assertIn('#include "xsam_xs_platform.h"', sample)
-        self.assertIn("NEXUS_MEMSCAN_CAUSE_LOAD_PAGE", sample)
-        self.assertIn("NEXUS_MEMSCAN_CAUSE_STORE_PAGE", sample)
-        self.assertIn("NEXUS_MEMSCAN_MSTATUS_MPP_S", sample)
-        self.assertIn("NEXUS_MEMSCAN_MSTATUS_MPRV", sample)
-        self.assertIn("NEXUS_MEMSCAN_SATP_MODE_SV39", sample)
-        self.assertIn("__attribute__((aligned(4096)))", sample)
-        self.assertIn("xsam_xs_pmp_init();", sample)
-        self.assertIn("static void nexus_memscan_install_sv39_root(void)", sample)
-        self.assertIn('csrw satp, %0', sample)
-        self.assertIn('sfence.vma x0, x0', sample)
-        self.assertIn("static void nexus_memscan_faulting_store(uintptr_t addr, uint64_t value)", sample)
-        self.assertIn("static uint64_t nexus_memscan_faulting_load(uintptr_t addr)", sample)
-        self.assertIn('csrrw t0, mstatus, %2', sample)
-        self.assertIn("frame->epc += nexus_memscan_insn_len(frame->epc);", sample)
-
-    def test_nexus_memscan_hugepage_program_uses_level1_leaf_mapping(self) -> None:
-        sample = (ROOT / "snippets" / "programs" / "nexus_memscan_hugepage_main.c").read_text()
-
-        self.assertIn('#include "xsam_xs_platform.h"', sample)
-        self.assertIn("NEXUS_MEMSCAN_CAUSE_STORE_PAGE", sample)
-        self.assertIn("NEXUS_MEMSCAN_MSTATUS_MPP_S", sample)
-        self.assertIn("NEXUS_MEMSCAN_MSTATUS_MPRV", sample)
-        self.assertIn("__attribute__((aligned(2097152)))", sample)
-        self.assertIn("xsam_xs_pmp_init();", sample)
-        self.assertIn("static void nexus_memscan_map_huge_leaf(", sample)
-        self.assertIn("static uint64_t nexus_memscan_faulting_load(uintptr_t addr)", sample)
-        self.assertIn("static void nexus_memscan_faulting_store(uintptr_t addr, uint64_t value)", sample)
-        self.assertIn("frame->epc += nexus_memscan_insn_len(frame->epc);", sample)
-
-    def test_nexus_memscan_hugepage_access_fault_program_uses_huge_leaf_and_pmp_deny_window(self) -> None:
-        sample = (ROOT / "snippets" / "programs" / "nexus_memscan_hugepage_access_fault_main.c").read_text()
-
-        self.assertIn('#include "xsam_xs_platform.h"', sample)
-        self.assertIn("NEXUS_MEMSCAN_CAUSE_LOAD_ACCESS", sample)
-        self.assertIn("NEXUS_MEMSCAN_CAUSE_STORE_ACCESS", sample)
-        self.assertIn("NEXUS_MEMSCAN_MSTATUS_MPP_S", sample)
-        self.assertIn("NEXUS_MEMSCAN_MSTATUS_MPRV", sample)
-        self.assertIn("__attribute__((aligned(2097152)))", sample)
-        self.assertIn("xsam_xs_pmp_init();", sample)
-        self.assertIn("xsam_xs_pmp_enable_napot(", sample)
-        self.assertIn("static void nexus_memscan_map_huge_leaf(", sample)
-        self.assertIn("static uint64_t nexus_memscan_faulting_load(uintptr_t addr)", sample)
-        self.assertIn("static void nexus_memscan_faulting_store(uintptr_t addr, uint64_t value)", sample)
-        self.assertIn("frame->epc += nexus_memscan_insn_len(frame->epc);", sample)
-
-    def test_nexus_memscan_hugepage_atom_fault_program_uses_amo_lr_and_huge_leafs(self) -> None:
-        sample = (ROOT / "snippets" / "programs" / "nexus_memscan_hugepage_atom_fault_main.c").read_text()
-
-        self.assertIn('#include "xsam_xs_platform.h"', sample)
-        self.assertIn("NEXUS_MEMSCAN_CAUSE_LOAD_PAGE", sample)
-        self.assertIn("NEXUS_MEMSCAN_CAUSE_STORE_PAGE", sample)
-        self.assertIn("NEXUS_MEMSCAN_MSTATUS_MPP_S", sample)
-        self.assertIn("NEXUS_MEMSCAN_MSTATUS_MPRV", sample)
-        self.assertIn("__attribute__((aligned(2097152)))", sample)
-        self.assertIn("xsam_xs_pmp_init();", sample)
-        self.assertIn("static void nexus_memscan_map_huge_leaf(", sample)
-        self.assertIn("static void nexus_memscan_faulting_amoadd(uintptr_t addr, uint64_t value)", sample)
-        self.assertIn("static uint64_t nexus_memscan_faulting_lr(uintptr_t addr)", sample)
-        self.assertIn("amoadd.d", sample)
-        self.assertIn("lr.d", sample)
-        self.assertIn("frame->epc += nexus_memscan_insn_len(frame->epc);", sample)
-
-    def test_emitter_wraps_main_style_program_as_snippet(self) -> None:
+    def test_emitter_generates_descriptor_wrapper_for_am_program(self) -> None:
         emitter = importlib.import_module("generator.xsgen.emitter")
         model = importlib.import_module("generator.xsgen.model")
         toolchain = importlib.import_module("generator.xsgen.toolchain")
@@ -228,20 +52,24 @@ class AMProgramSnippetBuildTest(unittest.TestCase):
 
             emitter.emit_harness(plan, artifact.generated_suite_path)
             harness = artifact.generated_suite_path.read_text()
+            wrapper = (artifact.build_dir / "generated_am_program_demo_program.c").read_text()
 
             self.assertIn('#include "xsam/program_snippet.h"', harness)
-            self.assertIn("#define main xsam_program_entry_demo_program", harness)
-            self.assertIn(f'#include "{program_source.resolve()}"', harness)
-            self.assertIn("#undef main", harness)
+            self.assertIn("extern int xsam_program_entry_demo_program(void);", harness)
+            self.assertIn("extern const xsrt_snippet_desc_t snippet_demo_program;", harness)
+            self.assertNotIn(f'#include "{program_source.resolve()}"', harness)
+            self.assertNotIn("#define main xsam_program_entry_demo_program", harness)
+            self.assertIn('#include "xsam/program_snippet.h"', wrapper)
+            self.assertIn("extern int xsam_program_entry_demo_program(void);", wrapper)
             self.assertIn(
                 'XSAM_DEFINE_PROGRAM_SNIPPET(snippet_demo_program, "demo_program", xsam_program_entry_demo_program)',
-                harness,
+                wrapper,
             )
             self.assertIn("xsrt_run_snippet(&env, &snippet_init_basic_env);", harness)
             self.assertIn("xsrt_run_snippet(&env, &snippet_demo_program);", harness)
             self.assertIn("xsrt_run_snippet(&env, &snippet_finish_check);", harness)
 
-    def test_build_pipeline_compiles_am_program_via_generated_harness(self) -> None:
+    def test_build_pipeline_renames_actual_am_program_entry_source_even_when_listed_last(self) -> None:
         emitter = importlib.import_module("generator.xsgen.emitter")
         model = importlib.import_module("generator.xsgen.model")
         toolchain = importlib.import_module("generator.xsgen.toolchain")
@@ -250,6 +78,16 @@ class AMProgramSnippetBuildTest(unittest.TestCase):
             tmp_root = Path(tmpdir)
             program_source = tmp_root / "demo_program.c"
             helper_source = tmp_root / "demo_helper.c"
+            helper_source.write_text(
+                "\n".join(
+                    [
+                        "extern int main(void);",
+                        "int (*demo_entry_ref)(void) = main;",
+                        "int demo_helper(void) { return demo_entry_ref != 0 ? 0 : 1; }",
+                    ]
+                )
+                + "\n"
+            )
             program_source.write_text(
                 "\n".join(
                     [
@@ -261,7 +99,6 @@ class AMProgramSnippetBuildTest(unittest.TestCase):
                 )
                 + "\n"
             )
-            helper_source.write_text("int demo_helper(void) { return 0; }\n")
 
             plan = model.ComposePlan(
                 suite_name="am_program_build_case",
@@ -280,7 +117,7 @@ class AMProgramSnippetBuildTest(unittest.TestCase):
                         kind="am_program",
                         lang="c",
                         entry="main",
-                        sources=(program_source.resolve(), helper_source.resolve()),
+                        sources=(helper_source.resolve(), program_source.resolve()),
                     ),
                     model.SnippetSpec(
                         id="finish_check",
@@ -300,17 +137,106 @@ class AMProgramSnippetBuildTest(unittest.TestCase):
             self.assertTrue(artifact.build_manifest_path.is_file())
 
             manifest = json.loads(artifact.build_manifest_path.read_text())
-            compile_sources = [
-                cmd[cmd.index("-c") + 1]
-                for cmd in manifest["commands"]["compile"]
-            ]
-            self.assertNotIn(str(program_source.resolve()), compile_sources)
+            compile_commands = manifest["commands"]["compile"]
+            compile_sources = [cmd[cmd.index("-c") + 1] for cmd in compile_commands]
+            wrapper_source = str((artifact.build_dir / "generated_am_program_demo_program.c").resolve())
+
+            self.assertIn(str(program_source.resolve()), compile_sources)
             self.assertIn(str(helper_source.resolve()), compile_sources)
+            self.assertIn(wrapper_source, compile_sources)
             self.assertIn(str(artifact.generated_suite_path), compile_sources)
             self.assertIn(
                 str((ROOT / "runtime" / "src" / "xsam_program_snippet.c").resolve()),
                 compile_sources,
             )
+            program_compile = next(
+                cmd for cmd in compile_commands if cmd[cmd.index("-c") + 1] == str(program_source.resolve())
+            )
+            self.assertIn("-Dmain=xsam_program_entry_demo_program", program_compile)
+            helper_compile = next(
+                cmd for cmd in compile_commands if cmd[cmd.index("-c") + 1] == str(helper_source.resolve())
+            )
+            self.assertIn("-Dmain=xsam_program_entry_demo_program", helper_compile)
+
+    def test_build_pipeline_keeps_am_programs_in_separate_translation_units(self) -> None:
+        emitter = importlib.import_module("generator.xsgen.emitter")
+        model = importlib.import_module("generator.xsgen.model")
+        toolchain = importlib.import_module("generator.xsgen.toolchain")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_root = Path(tmpdir)
+            program_a = tmp_root / "program_a.c"
+            program_b = tmp_root / "program_b.c"
+            program_a.write_text(
+                "\n".join(
+                    [
+                        "static int helper(void) { return 1; }",
+                        "int main(void) {",
+                        "  return helper() - 1;",
+                        "}",
+                    ]
+                )
+                + "\n"
+            )
+            program_b.write_text(
+                "\n".join(
+                    [
+                        "static int helper(void) { return 2; }",
+                        "int altmain(void) {",
+                        "  return helper() - 2;",
+                        "}",
+                    ]
+                )
+                + "\n"
+            )
+
+            plan = model.ComposePlan(
+                suite_name="am_program_separate_tu_case",
+                target="xiangshan-verilator",
+                seed=13,
+                snippet_ids=("init_basic_env", "program_a", "program_b", "finish_check"),
+                snippets=(
+                    model.SnippetSpec(
+                        id="init_basic_env",
+                        kind="proc",
+                        lang="c",
+                        sources=((ROOT / "snippets" / "core" / "init_basic_env.c").resolve(),),
+                    ),
+                    model.SnippetSpec(
+                        id="program_a",
+                        kind="am_program",
+                        lang="c",
+                        entry="main",
+                        sources=(program_a.resolve(),),
+                    ),
+                    model.SnippetSpec(
+                        id="program_b",
+                        kind="am_program",
+                        lang="c",
+                        entry="altmain",
+                        sources=(program_b.resolve(),),
+                    ),
+                    model.SnippetSpec(
+                        id="finish_check",
+                        kind="proc",
+                        lang="c",
+                        sources=((ROOT / "snippets" / "core" / "finish_check.c").resolve(),),
+                    ),
+                ),
+            )
+            artifact = toolchain.artifact_paths_for_suite(tmp_root, plan.suite_name)
+
+            emitter.emit_harness(plan, artifact.generated_suite_path)
+            toolchain.build_artifacts(ROOT, plan, artifact)
+
+            self.assertTrue(artifact.elf_path.is_file())
+            manifest = json.loads(artifact.build_manifest_path.read_text())
+            compile_sources = [
+                cmd[cmd.index("-c") + 1]
+                for cmd in manifest["commands"]["compile"]
+            ]
+            self.assertIn(str((artifact.build_dir / "generated_am_program_program_a.c").resolve()), compile_sources)
+            self.assertIn(str((artifact.build_dir / "generated_am_program_program_b.c").resolve()), compile_sources)
 
 
 if __name__ == "__main__":

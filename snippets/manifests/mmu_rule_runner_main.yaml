@@ -1,0 +1,6 @@
+id: mmu_rule_runner_main
+kind: am_program
+lang: c
+entry: main
+sources:
+  - snippets/programs/mmu_rule_runner_main.c

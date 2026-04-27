@@ -64,7 +64,14 @@ static uint64_t prefetchw_load_issue(const uint8_t *ptr) {
 
 
 static void prefetchw_issue(const uint8_t *ptr) {
-  __asm__ volatile("prefetch.w 0(%0)" : : "r"(ptr) : "memory");
+  register uintptr_t addr __asm__("a5") = (uintptr_t) ptr;
+
+  __asm__ volatile(
+      ".word 0x0037e013\n\t"
+      "# prefetch.w 0(%0)"
+      :
+      : "r"(addr)
+      : "memory");
 }
 
 

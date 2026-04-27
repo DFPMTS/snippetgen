@@ -1,0 +1,21 @@
+id: bare_identity
+requestor: load
+mode: bare
+setup:
+  mappings:
+    - name: identity_page
+      kind: identity
+      va: 0x80020000
+      pa: 0x80020000
+      perms: [r, a]
+trigger:
+  op: load
+  addr: identity_page
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.load
+  - mode.bare
+  - page.identity

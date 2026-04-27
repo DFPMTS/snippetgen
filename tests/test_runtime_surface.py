@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -84,10 +85,100 @@ class RuntimeSurfaceTest(unittest.TestCase):
         self.assertIn('csrw mscratch, %0', trap_c)
         self.assertIn("xsrt_reset_mscratch_for_sync_traps();", trap_c)
 
+    def test_sync_trap_install_preserves_active_timer_scratch(self) -> None:
+        trap_c = (ROOT / "runtime/src/xsrt_trap.c").read_text()
+        intr_h = (ROOT / "runtime/include/xsrt_intr.h").read_text()
+        intr_c = (ROOT / "runtime/src/xsrt_intr.c").read_text()
+
+        self.assertIn('#include "xsrt_intr.h"', trap_c)
+        self.assertIn("int xsrt_timer_trap_state_active(void);", intr_h)
+        self.assertIn("int xsrt_timer_trap_state_active(void)", intr_c)
+        self.assertIn("return g_stimer_enabled != 0;", intr_c)
+        self.assertIn(
+            "if (xsrt_timer_trap_state_active() == 0) {\n"
+            "    xsrt_reset_mscratch_for_sync_traps();\n"
+            "  }",
+            trap_c,
+        )
+
     def test_disabling_stimer_restores_sync_trap_scratch(self) -> None:
         intr_c = (ROOT / "runtime/src/xsrt_intr.c").read_text()
 
         self.assertIn("xsrt_reset_mscratch_for_sync_traps();", intr_c)
+
+    def test_timer_trap_env_offsets_match_xsrt_env_layout(self) -> None:
+        cc = shutil.which("cc")
+        if cc is None:
+            self.skipTest("host cc not available")
+
+        trap_s = (ROOT / "runtime/arch/riscv64/trap.S").read_text()
+        probe_c = textwrap.dedent(
+            """
+            #include <stddef.h>
+            #include <stdio.h>
+
+            #include "xsrt_env.h"
+
+            int main(void) {
+              printf(
+                  "%zu %zu %zu %zu %zu\\n",
+                  offsetof(xsrt_env_t, flags),
+                  offsetof(xsrt_env_t, finish_code),
+                  offsetof(xsrt_env_t, interrupt_count),
+                  offsetof(xsrt_env_t, last_trap_cause),
+                  offsetof(xsrt_env_t, last_trap_epc));
+              return 0;
+            }
+            """
+        ).strip()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            probe_path = Path(tmpdir) / "xsrt_env_offsets.c"
+            executable_path = Path(tmpdir) / "xsrt_env_offsets"
+            probe_path.write_text(probe_c)
+
+            compile_result = subprocess.run(
+                [
+                    cc,
+                    "-std=c11",
+                    "-Wall",
+                    "-Wextra",
+                    "-Werror",
+                    "-I",
+                    str(ROOT / "runtime/include"),
+                    str(probe_path),
+                    "-o",
+                    str(executable_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(0, compile_result.returncode, msg=compile_result.stderr)
+
+            run_result = subprocess.run(
+                [str(executable_path)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(0, run_result.returncode, msg=run_result.stderr)
+
+        offsets = [int(value) for value in run_result.stdout.strip().split()]
+        self.assertEqual(5, len(offsets))
+        names = (
+            "XSRT_ENV_FLAGS",
+            "XSRT_ENV_FINISH_CODE",
+            "XSRT_ENV_INTERRUPT_COUNT",
+            "XSRT_ENV_LAST_TRAP_CAUSE",
+            "XSRT_ENV_LAST_TRAP_EPC",
+        )
+        expected_offsets = dict(zip(names, offsets))
+
+        for macro_name, expected_offset in expected_offsets.items():
+            match = re.search(rf"#define {macro_name} (\d+)", trap_s)
+            self.assertIsNotNone(match, msg=f"missing {macro_name} in trap.S")
+            self.assertEqual(expected_offset, int(match.group(1)), msg=macro_name)
 
     def test_xsrt_snippet_helpers_execute_expected_sequences(self) -> None:
         cc = shutil.which("cc")
@@ -394,16 +485,7 @@ class RuntimeSurfaceTest(unittest.TestCase):
                 "-Wall",
                 "-Wextra",
                 "-Werror",
-                "-O2",
-                "-march=rv64gcv_zicbop",
-                "-mabi=lp64d",
-                "-mcmodel=medany",
-                "-ffreestanding",
-                "-fno-asynchronous-unwind-tables",
-                "-fno-builtin",
-                "-fno-stack-protector",
-                "-fno-tree-vectorize",
-                "-fno-tree-slp-vectorize",
+                *toolchain.riscv_compile_flags(),
                 "-I",
                 str(ROOT / "runtime/include"),
                 "-I",
@@ -426,6 +508,14 @@ class RuntimeSurfaceTest(unittest.TestCase):
                 compile_result.returncode,
                 msg=compile_result.stderr,
             )
+
+    def test_xiangshan_pmp_uses_numeric_csr_operands_for_extended_pmpcfg(self) -> None:
+        source = (ROOT / "runtime/platform/xiangshan/xsam_xs_pmp.c").read_text()
+
+        for index in range(4, 16):
+            self.assertNotIn(f"pmpcfg{index}", source)
+        self.assertIn("0x3a4", source)
+        self.assertIn("0x3af", source)
 
 
 if __name__ == "__main__":

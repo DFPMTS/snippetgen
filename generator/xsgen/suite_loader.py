@@ -6,6 +6,7 @@ import re
 
 import yaml
 
+from generator.xsgen.mmu_rule_loader import load_mmu_rule_db
 from generator.xsgen.model import ComposePlan, SnippetSpec, SuiteSpec
 
 SUPPORTED_TARGET = "xiangshan-verilator"
@@ -16,6 +17,55 @@ def _require_mapping(data: object, path: Path) -> dict:
     if not isinstance(data, dict):
         raise ValueError(f"{path} must contain a YAML mapping")
     return data
+
+
+def _require_string_list(data: object, field_name: str, path: Path) -> tuple[str, ...]:
+    if not isinstance(data, list) or not data:
+        raise ValueError(f"{path} field '{field_name}' must be a non-empty list")
+    if not all(isinstance(item, str) and item for item in data):
+        raise ValueError(f"{path} field '{field_name}' contains an invalid string entry")
+    return tuple(data)
+
+
+def _resolve_rule_dir(raw_path: object, path: Path) -> Path:
+    if not isinstance(raw_path, str) or not raw_path:
+        raise ValueError(f"{path} field 'compose.mmu.rule_dir' must be a non-empty string")
+
+    candidate = Path(raw_path)
+    if not candidate.is_absolute():
+        candidate = (path.parent / candidate).resolve()
+    else:
+        candidate = candidate.resolve()
+
+    if not candidate.is_dir():
+        raise ValueError(f"{path} MMU rule directory does not exist: {raw_path}")
+    return candidate
+
+
+def _load_mmu_section(compose: Mapping[str, object], path: Path) -> tuple[Path | None, tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    raw_mmu = compose.get("mmu")
+    if raw_mmu is None:
+        return None, (), (), ()
+
+    mmu = _require_mapping(raw_mmu, path)
+    rule_dir = _resolve_rule_dir(mmu.get("rule_dir"), path)
+    rule_ids = _require_string_list(mmu.get("rule_ids"), "compose.mmu.rule_ids", path)
+    if len(set(rule_ids)) != len(rule_ids):
+        raise ValueError(f"{path} field 'compose.mmu.rule_ids' contains duplicates")
+
+    rule_db = load_mmu_rule_db(rule_dir)
+    missing = [rule_id for rule_id in rule_ids if rule_id not in rule_db]
+    if missing:
+        raise ValueError(f"unknown MMU rule id in suite: {missing[0]}")
+
+    coverage_tags = sorted(
+        {
+            tag
+            for rule_id in rule_ids
+            for tag in rule_db[rule_id].coverage_tags
+        }
+    )
+    return rule_dir, rule_ids, tuple(sorted(rule_db)), tuple(coverage_tags)
 
 
 def load_suite(path: Path) -> SuiteSpec:
@@ -52,11 +102,18 @@ def load_suite(path: Path) -> SuiteSpec:
     if legacy_present and deferred_present:
         raise ValueError(f"{path} cannot mix compose.snippets with run_snippets/check_snippets")
 
+    mmu_rule_dir, mmu_rule_ids, mmu_defined_rule_ids, mmu_coverage_tags = _load_mmu_section(
+        compose,
+        path,
+    )
+
     if legacy_present:
         if not isinstance(legacy_snippet_ids, list) or not legacy_snippet_ids:
             raise ValueError(f"{path} field 'compose.snippets' must be a non-empty list")
         if not all(isinstance(item, str) and item for item in legacy_snippet_ids):
             raise ValueError(f"{path} field 'compose.snippets' contains an invalid snippet id")
+        if mmu_rule_dir is not None and "mmu_rule_runner_main" not in legacy_snippet_ids:
+            raise ValueError(f"{path} compose.mmu requires mmu_rule_runner_main in compose.snippets")
 
         return SuiteSpec(
             name=suite_name,
@@ -64,10 +121,16 @@ def load_suite(path: Path) -> SuiteSpec:
             seed=raw_seed,
             compose_mode=str(mode),
             snippet_ids=tuple(legacy_snippet_ids),
+            mmu_rule_dir=mmu_rule_dir,
+            mmu_rule_ids=mmu_rule_ids,
+            mmu_defined_rule_ids=mmu_defined_rule_ids,
+            mmu_coverage_tags=mmu_coverage_tags,
         )
 
     if not deferred_present:
         raise ValueError(f"{path} compose section requires snippets or run_snippets/check_snippets")
+    if mmu_rule_dir is not None:
+        raise ValueError(f"{path} compose.mmu currently requires compose.snippets")
     if not isinstance(run_snippet_ids, list) or not run_snippet_ids:
         raise ValueError(f"{path} field 'compose.run_snippets' must be a non-empty list")
     if not isinstance(check_snippet_ids, list) or not check_snippet_ids:
@@ -106,4 +169,8 @@ def build_compose_plan(
         snippets=tuple(resolved_snippets),
         run_snippet_ids=suite.run_snippet_ids,
         check_snippet_ids=suite.check_snippet_ids,
+        mmu_rule_dir=suite.mmu_rule_dir,
+        mmu_rule_ids=suite.mmu_rule_ids,
+        mmu_defined_rule_ids=suite.mmu_defined_rule_ids,
+        mmu_coverage_tags=suite.mmu_coverage_tags,
     )

@@ -83,6 +83,10 @@ void xsrt_timer_set_cte_active(int active) {
   }
 }
 
+int xsrt_timer_trap_state_active(void) {
+  return g_stimer_enabled != 0;
+}
+
 uint64_t xsrt_timer_last_delta(void) {
   return g_timer_delta;
 }
