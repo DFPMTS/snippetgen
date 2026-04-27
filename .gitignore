@@ -1,6 +1,8 @@
 __pycache__/
 *.pyc
-.codex
+.codex/*
+!.codex/skills/
+!.codex/skills/**
 .humanize*
 .cache/
 build/*

@@ -1,0 +1,4 @@
+interface:
+  display_name: "SnippetGen Development"
+  short_description: "Project workflow for snippetgen changes"
+  default_prompt: "Use $snippetgen-development to work on a snippetgen suite, runtime, MMU rule, or verification task."
