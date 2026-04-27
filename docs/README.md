@@ -1,6 +1,6 @@
 # Docs Index
 
-This directory is split into three kinds of material:
+This directory is split into four kinds of material:
 
 ## Start Here
 
@@ -8,8 +8,21 @@ This directory is split into three kinds of material:
   - repository overview, quick start, suite map, agent entry points
 - [`2026-04-10-xiangshan-emu-workload-howto.md`](2026-04-10-xiangshan-emu-workload-howto.md)
   - build and run workloads on XiangShan `emu`
+- [`mmu-spec-in-case-out.md`](mmu-spec-in-case-out.md)
+  - MMU rule schema, generated artifacts, pilot suite, and coverage ledger guide
 - [`release-notes-2026-04-11.md`](release-notes-2026-04-11.md)
   - current release snapshot
+
+## MMU Rule Interface
+
+- [`mmu-spec-in-case-out.md`](mmu-spec-in-case-out.md)
+  - start here for `suites/mmu_pilot_rules_poc.yaml`, `snippets/mmu_rules/pilot/`, `generated_mmu_rule.*`, and `mmu_coverage_ledger.json`
+- [`archive/2026-04-24-mmu-interface-inventory.md`](archive/2026-04-24-mmu-interface-inventory.md)
+  - historical inventory mapping legacy `mmutest` responsibilities to the new `xsam_mmu_*` surface
+- [`archive/2026-04-24-mmu-spec-in-case-out-interface-design.md`](archive/2026-04-24-mmu-spec-in-case-out-interface-design.md)
+  - historical design draft
+- [`archive/2026-04-24-mmu-spec-in-case-out-interface-plan.md`](archive/2026-04-24-mmu-spec-in-case-out-interface-plan.md)
+  - historical implementation plan
 
 ## Investigation Notes
 
@@ -27,7 +40,8 @@ This directory is split into three kinds of material:
 
 1. [`../README.md`](../README.md)
 2. target suite in `suites/`
-3. snippet manifests in `snippets/manifests/`
-4. snippet sources in `snippets/`
-5. generator pipeline in `generator/xsgen/`
-6. tests in `tests/`
+3. for MMU suites, [`mmu-spec-in-case-out.md`](mmu-spec-in-case-out.md) and selected rules in `snippets/mmu_rules/`
+4. snippet manifests in `snippets/manifests/`
+5. snippet sources in `snippets/`
+6. generator pipeline in `generator/xsgen/`
+7. tests in `tests/`

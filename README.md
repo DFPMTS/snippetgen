@@ -10,6 +10,7 @@ This repository is now beyond the initial skeleton stage. It can:
 - run workloads on XiangShan `emu`
 - record structured run results under `build/<suite>/runs/`
 - keep path-oriented and bug-hunting suites side by side
+- generate MMU rule-driven pilot cases from structured YAML specs
 
 ## Quick Start
 
@@ -26,7 +27,22 @@ Artifacts are written to:
 - `build/scalar_load_legality_poc/disasm`
 - `build/scalar_load_legality_poc/build_manifest.json`
 
-### 2. Run one suite on XiangShan `emu`
+### 2. Inspect and build the MMU pilot suite
+
+The MMU flow uses a small rule database under `snippets/mmu_rules/pilot/` and emits generated C/header artifacts for the generic MMU runner.
+
+```bash
+python3 generator/cli.py dump-plan suites/mmu_pilot_rules_poc.yaml
+python3 generator/cli.py build suites/mmu_pilot_rules_poc.yaml
+```
+
+Additional MMU artifacts are written beside the normal build outputs:
+
+- `build/mmu_pilot_rules_poc/generated_mmu_rule.h`
+- `build/mmu_pilot_rules_poc/generated_mmu_rule.c`
+- `build/mmu_pilot_rules_poc/mmu_coverage_ledger.json`
+
+### 3. Run one suite on XiangShan `emu`
 
 ```bash
 export SNIPPETGEN_XS_ENV_SH=/path/to/xs-env/env.sh
@@ -68,8 +84,7 @@ make repro-split-store
 
 ### Core directories
 
-- `generator/`
-  - CLI, suite loading, harness emission, build, run orchestration
+- `generator/`: CLI, suite loading, harness emission, build, run orchestration
 - `runtime/`
   - baremetal runtime used by generated workloads
 - `snippets/`
@@ -93,6 +108,10 @@ make repro-split-store
   - compiles, links, runs `objcopy`, emits `disasm`
 - `generator/xsgen/run_batch.py`
   - batch run orchestration and ledger emission
+- `generator/xsgen/mmu_rule_loader.py`
+  - MMU rule schema validation and coverage taxonomy
+- `generator/xsgen/mmu_rule_emitter.py`
+  - emits `generated_mmu_rule.h`, `generated_mmu_rule.c`, and `mmu_coverage_ledger.json`
 - `targets/xiangshan-verilator/run_target.py`
   - XiangShan `emu` adapter
 
@@ -106,6 +125,13 @@ make repro-split-store
   - minimal path-oriented `vsetvl` plus interrupt-related setup
 - `suites/interrupt_response_poc.yaml`
   - proves real timer interrupt delivery is visible to the runtime
+
+### MMU spec-in/case-out suites
+
+- `suites/mmu_bare_identity_poc.yaml`
+  - smallest MMU rule-runner smoke suite with one bare identity rule
+- `suites/mmu_pilot_rules_poc.yaml`
+  - pilot MMU rule bundle covering bare identity, Sv39 alias, superpage, `sfence` remap, load page fault, and two-stage guest-page-fault paths
 
 ### Investigation and bug-hunting suites
 
@@ -144,6 +170,21 @@ Expected result:
 
 - `status: "ran"`
 - `labels` include `good_trap`
+
+### MMU pilot rules
+
+```bash
+export SNIPPETGEN_XS_ENV_SH=/path/to/xs-env/env.sh
+source "$SNIPPETGEN_XS_ENV_SH"
+python3 generator/cli.py run suites/mmu_pilot_rules_poc.yaml --seed 51967 --batch-id mmu_pilot_verify
+```
+
+Expected result:
+
+- the matching `batch_meta.json` entry records `status: "ran"` and `finish_code: 0`
+- `stdout.log` reaches `HIT GOOD TRAP`
+- `mmu_coverage_ledger.json` promotes the selected pilot rules to `ran`
+- the pilot bundle includes the `two_stage_fault` rule, which covers `requestor.hlv`, `mode.allStage`, `guest.two_stage`, and `exception.guest_page_fault`
 
 ### Illegal-address `load` plus `prefetch.w`
 
@@ -223,6 +264,9 @@ build/<suite>/
   test.bin
   disasm
   build_manifest.json
+  generated_mmu_rule.h     # only for MMU rule suites
+  generated_mmu_rule.c     # only for MMU rule suites
+  mmu_coverage_ledger.json # only for MMU rule suites
 ```
 
 ### Build-plus-run layout
@@ -239,6 +283,9 @@ build/<suite>/runs/
       stdout.log
       stderr.log
       run_meta.json
+      generated_mmu_rule.h     # only for MMU rule suites
+      generated_mmu_rule.c     # only for MMU rule suites
+      mmu_coverage_ledger.json # only for MMU rule suites
       lightsss-wave        # only on abort/bad-trap when external XiangShan tracing is active
 ```
 
@@ -248,6 +295,8 @@ build/<suite>/runs/
 
 - [`docs/2026-04-10-xiangshan-emu-workload-howto.md`](docs/2026-04-10-xiangshan-emu-workload-howto.md)
   - practical XiangShan `emu` build/run guide
+- [`docs/mmu-spec-in-case-out.md`](docs/mmu-spec-in-case-out.md)
+  - MMU rule schema, generated artifacts, pilot suite, and coverage ledger guide
 - [`docs/release-notes-2026-04-11.md`](docs/release-notes-2026-04-11.md)
   - what changed in this snapshot
 
@@ -267,16 +316,18 @@ If you are an AI agent entering this repository cold, use this order:
 
 1. Read `README.md`
 2. Read the target suite YAML in `suites/`
-3. Read the referenced snippet manifests in `snippets/manifests/`
-4. Read the snippet sources under `snippets/`
-5. Read `generator/cli.py`, `emitter.py`, `toolchain.py`, and `run_batch.py`
-6. Read `tests/test_snippet_loading.py`, `tests/test_build_pipeline.py`, and `tests/test_run_pipeline.py`
+3. For MMU suites, read `docs/mmu-spec-in-case-out.md` and the selected rules in `snippets/mmu_rules/`
+4. Read the referenced snippet manifests in `snippets/manifests/`
+5. Read the snippet sources under `snippets/`
+6. Read `generator/cli.py`, `emitter.py`, `toolchain.py`, `run_batch.py`, and the MMU loader/emitter when relevant
+7. Read `tests/test_snippet_loading.py`, `tests/test_build_pipeline.py`, `tests/test_run_pipeline.py`, and the MMU-focused tests when relevant
 
 Recommended first commands:
 
 ```bash
 python3 generator/cli.py dump-plan suites/misaligned_split_store_search_poc.yaml
 python3 generator/cli.py build suites/misaligned_split_store_search_poc.yaml
+python3 generator/cli.py dump-plan suites/mmu_pilot_rules_poc.yaml
 python3 -m unittest tests.test_snippet_loading tests.test_build_pipeline
 ```
 
