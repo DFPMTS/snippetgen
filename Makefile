@@ -1,4 +1,4 @@
-.PHONY: build run list-snippets dump-plan test-layout test-snippet-loading repro-vsetvl repro-split-store kmh-mmu-layer1-build kmh-mmu-layer1-full-build kmh-mmu-layer1-smoke-v2 kmh-mmu-layer1-smoke-v3
+.PHONY: build run list-snippets dump-plan test-snippet-loading repro-vsetvl repro-split-store kmh-mmu-layer1-build kmh-mmu-layer1-full-build kmh-mmu-layer1-smoke-v2 kmh-mmu-layer1-smoke-v3
 
 build:
 	python3 generator/cli.py build suites/scalar_load_legality_poc.yaml
@@ -28,9 +28,6 @@ list-snippets:
 
 dump-plan:
 	python3 generator/cli.py dump-plan suites/scalar_load_legality_poc.yaml
-
-test-layout:
-	python3 -m unittest tests/test_repo_layout.py
 
 test-snippet-loading:
 	python3 -m unittest tests/test_snippet_loading.py

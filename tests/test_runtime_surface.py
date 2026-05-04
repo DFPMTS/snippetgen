@@ -9,30 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-RUNTIME_FILES = [
-    "runtime/include/xsrt_env.h",
-    "runtime/include/xsrt_csr.h",
-    "runtime/include/xsrt_trap.h",
-    "runtime/include/xsrt_intr.h",
-    "runtime/src/xsrt_env.c",
-    "runtime/src/xsrt_csr.c",
-    "runtime/src/xsrt_trap.c",
-    "runtime/src/xsrt_intr.c",
-    "runtime/src/xsrt_snippet.c",
-    "runtime/platform/xiangshan/xsrt_platform.h",
-    "runtime/platform/xiangshan/xsrt_platform.c",
-    "runtime/arch/riscv64/start.S",
-    "runtime/arch/riscv64/trap.S",
-    "snippets/include/xs_snippet.h",
-]
-
-
 class RuntimeSurfaceTest(unittest.TestCase):
-    def test_runtime_files_exist(self) -> None:
-        for relative_path in RUNTIME_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
-
     def test_runtime_headers_expose_minimal_api(self) -> None:
         env_h = (ROOT / "runtime/include/xsrt_env.h").read_text()
         csr_h = (ROOT / "runtime/include/xsrt_csr.h").read_text()

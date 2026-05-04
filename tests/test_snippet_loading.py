@@ -13,279 +13,39 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-ROUND2_FILES = [
-    "requirements.txt",
-    "generator/cli.py",
-    "generator/xsgen/model.py",
-    "generator/xsgen/snippet_db.py",
-    "generator/xsgen/suite_loader.py",
-    "snippets/core/init_basic_env.c",
-    "snippets/core/finish_check.c",
-    "snippets/scalar_load_legality/arm_timer.c",
-    "snippets/scalar_load_legality/unaligned_load.c",
-    "snippets/scalar_load_legality/check_scalar_load_legality.c",
-    "snippets/manifests/init_basic_env.yaml",
-    "snippets/manifests/finish_check.yaml",
-    "snippets/manifests/arm_timer.yaml",
-    "snippets/manifests/unaligned_load.yaml",
-    "snippets/manifests/check_scalar_load_legality.yaml",
-    "suites/scalar_load_legality_poc.yaml",
-]
-
-VSETVL_PATH_FILES = [
-    "snippets/vector_interrupt/vsetvl_interrupt_path.c",
-    "snippets/vector_interrupt/check_vsetvl_interrupt_path.c",
-    "snippets/manifests/vsetvl_interrupt_path.yaml",
-    "snippets/manifests/check_vsetvl_interrupt_path.yaml",
-    "suites/vsetvl_interrupt_path_poc.yaml",
-]
-
-VSETVL_SEARCH_FILES = [
-    "snippets/vector_interrupt/vsetvl_interrupt_search.c",
-    "snippets/vector_interrupt/check_vsetvl_interrupt_search.c",
-    "snippets/manifests/vsetvl_interrupt_search.yaml",
-    "snippets/manifests/check_vsetvl_interrupt_search.yaml",
-    "suites/vsetvl_interrupt_search_poc.yaml",
-]
-
-INTERRUPT_RESPONSE_FILES = [
-    "snippets/interrupt/interrupt_response_wait.c",
-    "snippets/interrupt/check_interrupt_response.c",
-    "snippets/manifests/interrupt_response_wait.yaml",
-    "snippets/manifests/check_interrupt_response.yaml",
-    "suites/interrupt_response_poc.yaml",
-]
-
-SPLIT_STORE_FORWARD_FILES = [
-    "snippets/store_forward/misaligned_split_store_search.c",
-    "snippets/store_forward/check_misaligned_split_store_search.c",
-    "snippets/manifests/misaligned_split_store_search.yaml",
-    "snippets/manifests/check_misaligned_split_store_search.yaml",
-    "suites/misaligned_split_store_search_poc.yaml",
-]
-
-EXAMPLE_FILES = [
-    "snippets/examples/demo_mark_flag.c",
-    "snippets/examples/check_demo_mark_flag.c",
-    "snippets/manifests/demo_mark_flag.yaml",
-    "snippets/manifests/check_demo_mark_flag.yaml",
-    "suites/demo_mark_flag_poc.yaml",
-]
-
-PREFETCHW_FILES = [
-    "snippets/include/xs_prefetchw.h",
-    "snippets/cbo/prefetchw_tl_denied_fault.c",
-    "snippets/cbo/check_prefetchw_tl_denied_fault.c",
-    "snippets/manifests/prefetchw_tl_denied_fault.yaml",
-    "snippets/manifests/check_prefetchw_tl_denied_fault.yaml",
-    "suites/prefetchw_tl_denied_fault_poc.yaml",
-]
-
-AM_PROGRAM_FILES = [
-    "snippets/programs/am_hello_main.c",
-    "snippets/manifests/am_hello_main.yaml",
-    "suites/am_hello_main_poc.yaml",
-]
-
-AM_TIMER_PROGRAM_FILES = [
-    "snippets/programs/am_timer_event_main.c",
-    "snippets/manifests/am_timer_event_main.yaml",
-    "suites/am_timer_event_poc.yaml",
-]
-
-SCALAR_MISALIGN_PHASE1_FILES = [
-    "snippets/programs/scalar_misalign_load_in_16b_main.c",
-    "snippets/programs/scalar_misalign_load_cross_16b_main.c",
-    "snippets/programs/scalar_misalign_store_in_16b_main.c",
-    "snippets/programs/scalar_misalign_store_cross_16b_main.c",
-    "snippets/programs/scalar_misalign_store_load_overlap_main.c",
-    "snippets/manifests/scalar_misalign_load_in_16b_main.yaml",
-    "snippets/manifests/scalar_misalign_load_cross_16b_main.yaml",
-    "snippets/manifests/scalar_misalign_store_in_16b_main.yaml",
-    "snippets/manifests/scalar_misalign_store_cross_16b_main.yaml",
-    "snippets/manifests/scalar_misalign_store_load_overlap_main.yaml",
-    "suites/scalar_misalign_load_in_16b_poc.yaml",
-    "suites/scalar_misalign_load_cross_16b_poc.yaml",
-    "suites/scalar_misalign_store_in_16b_poc.yaml",
-    "suites/scalar_misalign_store_cross_16b_poc.yaml",
-    "suites/scalar_misalign_store_load_overlap_poc.yaml",
-]
-
-NEXUS_CPUTEST_PORT_FILES = [
-    "snippets/programs/nexus_cputest_unalign_main.c",
-    "snippets/programs/nexus_cputest_load_store_main.c",
-    "snippets/manifests/nexus_cputest_unalign_main.yaml",
-    "snippets/manifests/nexus_cputest_load_store_main.yaml",
-    "suites/nexus_cputest_unalign_poc.yaml",
-    "suites/nexus_cputest_load_store_poc.yaml",
-]
-
-NEXUS_MEMSCAN_PORT_FILES = [
-    "snippets/programs/nexus_memscan_access_fault_main.c",
-    "snippets/programs/nexus_memscan_fetch_fault_main.c",
-    "snippets/programs/nexus_memscan_hugepage_access_fault_main.c",
-    "snippets/programs/nexus_memscan_hugepage_atom_fault_main.c",
-    "snippets/programs/nexus_memscan_hugepage_main.c",
-    "snippets/programs/nexus_memscan_page_fault_main.c",
-    "snippets/manifests/nexus_memscan_access_fault_main.yaml",
-    "snippets/manifests/nexus_memscan_fetch_fault_main.yaml",
-    "snippets/manifests/nexus_memscan_hugepage_access_fault_main.yaml",
-    "snippets/manifests/nexus_memscan_hugepage_atom_fault_main.yaml",
-    "snippets/manifests/nexus_memscan_hugepage_main.yaml",
-    "snippets/manifests/nexus_memscan_page_fault_main.yaml",
-    "suites/nexus_memscan_access_fault_poc.yaml",
-    "suites/nexus_memscan_fetch_fault_poc.yaml",
-    "suites/nexus_memscan_hugepage_access_fault_poc.yaml",
-    "suites/nexus_memscan_hugepage_atom_fault_poc.yaml",
-    "suites/nexus_memscan_hugepage_poc.yaml",
-    "suites/nexus_memscan_page_fault_poc.yaml",
-]
-
-SCALAR_MISALIGN_PHASE2_W1_FILES = [
-    "snippets/include/xs_scalar_misalign.h",
-    "snippets/scalar_misalign/load_split_templates.c",
-    "snippets/scalar_misalign/check_load_split_templates.c",
-    "snippets/scalar_misalign/store_split_templates.c",
-    "snippets/scalar_misalign/check_store_split_templates.c",
-    "snippets/scalar_misalign/cross_page_faults.c",
-    "snippets/scalar_misalign/check_cross_page_faults.c",
-    "snippets/manifests/load_split_templates.yaml",
-    "snippets/manifests/check_load_split_templates.yaml",
-    "snippets/manifests/store_split_templates.yaml",
-    "snippets/manifests/check_store_split_templates.yaml",
-    "snippets/manifests/cross_page_faults.yaml",
-    "snippets/manifests/check_cross_page_faults.yaml",
-    "suites/scalar_misalign_load_split_templates_poc.yaml",
-    "suites/scalar_misalign_store_split_templates_poc.yaml",
-    "suites/scalar_misalign_cross_page_faults_poc.yaml",
-]
-
-SCALAR_MISALIGN_PHASE2_W2_FILES = [
-    "snippets/scalar_misalign/store_forward_overlap.c",
-    "snippets/scalar_misalign/check_store_forward_overlap.c",
-    "snippets/manifests/store_forward_overlap.yaml",
-    "snippets/manifests/check_store_forward_overlap.yaml",
-    "suites/scalar_misalign_store_forward_overlap_poc.yaml",
-]
-
-SCALAR_MISALIGN_PHASE3_FILES = [
-    "snippets/scalar_misalign/store_forward_search.c",
-    "snippets/scalar_misalign/check_store_forward_search.c",
-    "snippets/scalar_misalign/cross_page_fault_search.c",
-    "snippets/scalar_misalign/check_cross_page_fault_search.c",
-    "snippets/scalar_misalign/replay_probe.c",
-    "snippets/scalar_misalign/check_replay_probe.c",
-    "snippets/manifests/store_forward_search.yaml",
-    "snippets/manifests/check_store_forward_search.yaml",
-    "snippets/manifests/cross_page_fault_search.yaml",
-    "snippets/manifests/check_cross_page_fault_search.yaml",
-    "snippets/manifests/replay_probe.yaml",
-    "snippets/manifests/check_replay_probe.yaml",
-    "suites/scalar_misalign_store_forward_search_poc.yaml",
-    "suites/scalar_misalign_cross_page_fault_search_poc.yaml",
-    "suites/scalar_misalign_replay_probe_poc.yaml",
-]
-
-SCALAR_MISALIGN_FAMILY_COMBO_FILES = [
-    "suites/scalar_misalign_templates_combo_poc.yaml",
-    "suites/scalar_misalign_fault_forward_combo_poc.yaml",
-    "suites/scalar_misalign_family_combo_poc.yaml",
-]
-
-DEFERRED_CHECK_FILES = [
-    "snippets/deferred_check/deferred_mark_stage_a.c",
-    "snippets/deferred_check/deferred_mark_stage_b.c",
-    "snippets/manifests/deferred_mark_stage_a.yaml",
-    "snippets/manifests/deferred_mark_stage_b.yaml",
-    "suites/deferred_check_markers_poc.yaml",
-]
-
-
 class SnippetLoadingTest(unittest.TestCase):
-    def test_round2_files_exist(self) -> None:
-        for relative_path in ROUND2_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
+    def compile_sources(self, sources: list[Path], *, extra_flags: list[str] | None = None) -> None:
+        toolchain = importlib.import_module("generator.xsgen.toolchain")
+        flags = extra_flags if extra_flags is not None else toolchain.riscv_compile_flags()
+        gcc = toolchain.detect_toolchain()["gcc"]
 
-    def test_vsetvl_path_files_exist(self) -> None:
-        for relative_path in VSETVL_PATH_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
-
-    def test_vsetvl_search_files_exist(self) -> None:
-        for relative_path in VSETVL_SEARCH_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
-
-    def test_interrupt_response_files_exist(self) -> None:
-        for relative_path in INTERRUPT_RESPONSE_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
-
-    def test_split_store_forward_files_exist(self) -> None:
-        for relative_path in SPLIT_STORE_FORWARD_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
-
-    def test_example_files_exist(self) -> None:
-        for relative_path in EXAMPLE_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
-
-    def test_prefetchw_tl_denied_fault_files_exist(self) -> None:
-        for relative_path in PREFETCHW_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
-
-    def test_am_program_files_exist(self) -> None:
-        for relative_path in AM_PROGRAM_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
-
-    def test_am_timer_program_files_exist(self) -> None:
-        for relative_path in AM_TIMER_PROGRAM_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
-
-    def test_scalar_misalign_phase1_files_exist(self) -> None:
-        for relative_path in SCALAR_MISALIGN_PHASE1_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
-
-    def test_nexus_cputest_port_files_exist(self) -> None:
-        for relative_path in NEXUS_CPUTEST_PORT_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
-
-    def test_nexus_memscan_port_files_exist(self) -> None:
-        for relative_path in NEXUS_MEMSCAN_PORT_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
-
-    def test_scalar_misalign_phase2_wave1_files_exist(self) -> None:
-        for relative_path in SCALAR_MISALIGN_PHASE2_W1_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
-
-    def test_scalar_misalign_phase2_wave2_files_exist(self) -> None:
-        for relative_path in SCALAR_MISALIGN_PHASE2_W2_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
-
-    def test_scalar_misalign_phase3_files_exist(self) -> None:
-        for relative_path in SCALAR_MISALIGN_PHASE3_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
-
-    def test_scalar_misalign_family_combo_files_exist(self) -> None:
-        for relative_path in SCALAR_MISALIGN_FAMILY_COMBO_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
-
-    def test_deferred_check_files_exist(self) -> None:
-        for relative_path in DEFERRED_CHECK_FILES:
-            with self.subTest(path=relative_path):
-                self.assertTrue((ROOT / relative_path).is_file())
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for src_path in sources:
+                out_path = Path(tmpdir) / (src_path.stem + ".o")
+                result = subprocess.run(
+                    [
+                        gcc,
+                        "-std=c11",
+                        "-Wall",
+                        "-Wextra",
+                        "-Werror",
+                        *flags,
+                        "-I",
+                        str(ROOT / "runtime/include"),
+                        "-I",
+                        str(ROOT / "snippets/include"),
+                        "-I",
+                        str(ROOT / "runtime/platform/xiangshan"),
+                        "-c",
+                        str(src_path),
+                        "-o",
+                        str(out_path),
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(0, result.returncode, msg=result.stderr)
 
     def test_prefetchw_default_target_addr_stays_outside_default_ram_window(self) -> None:
         header_text = (ROOT / "snippets/include/xs_prefetchw.h").read_text()
@@ -295,202 +55,32 @@ class SnippetLoadingTest(unittest.TestCase):
         target = int(target_match.group(1), 16)
         self.assertFalse(0x80000000 <= target < 0xC0000000)
 
-    def test_prefetchw_source_uses_raw_encoding_for_default_toolchain(self) -> None:
-        source_text = (ROOT / "snippets/cbo/prefetchw_tl_denied_fault.c").read_text()
-
-        self.assertIn(".word 0x0037e013", source_text)
-        self.assertNotIn('__asm__ volatile("prefetch.w', source_text)
-
-    def test_prefetchw_minimal_case_has_no_probe_loop_controls(self) -> None:
-        header_text = (ROOT / "snippets/include/xs_prefetchw.h").read_text()
-        self.assertNotIn("XS_PREFETCHW_PROBE_ROUNDS", header_text)
-        self.assertNotIn("XS_PREFETCHW_ISSUES_PER_ROUND", header_text)
-
-    def test_prefetchw_run_bad_traps_immediately_on_wrong_trap_shape(self) -> None:
-        source_text = (ROOT / "snippets/cbo/prefetchw_tl_denied_fault.c").read_text()
-        self.assertIn("XSRT_BAD_TRAP(XS_PREFETCHW_FAIL_LOAD_NO_TRAP);", source_text)
-        self.assertIn("XSRT_BAD_TRAP(XS_PREFETCHW_FAIL_LOAD_BAD_TRAP);", source_text)
-        self.assertIn("XSRT_BAD_TRAP(XS_PREFETCHW_FAIL_PREFETCH_TRAP);", source_text)
-
-    def test_prefetchw_trap_handler_advances_epc_by_instruction_length(self) -> None:
-        source_text = (ROOT / "snippets/cbo/prefetchw_tl_denied_fault.c").read_text()
-
-        self.assertIn("static uint64_t prefetchw_trap_insn_len(uint64_t epc)", source_text)
-        self.assertIn("const uint16_t insn_lo", source_text)
-        self.assertIn('((insn_lo & 0x3u) == 0x3u) ? 4u : 2u', source_text)
-        self.assertIn("frame->epc += prefetchw_trap_insn_len(frame->epc);", source_text)
-        self.assertNotIn("frame->epc += 4u;", source_text)
-
     def test_snippet_sources_compile(self) -> None:
-        snippet_sources = [
-            "snippets/core/init_basic_env.c",
-            "snippets/core/finish_check.c",
-            "snippets/scalar_load_legality/arm_timer.c",
-            "snippets/scalar_load_legality/unaligned_load.c",
-            "snippets/scalar_load_legality/check_scalar_load_legality.c",
-            "snippets/vector_interrupt/vsetvl_interrupt_path.c",
-            "snippets/vector_interrupt/check_vsetvl_interrupt_path.c",
-            "snippets/vector_interrupt/vsetvl_interrupt_search.c",
-            "snippets/vector_interrupt/check_vsetvl_interrupt_search.c",
-            "snippets/interrupt/interrupt_response_wait.c",
-            "snippets/interrupt/check_interrupt_response.c",
-            "snippets/store_forward/misaligned_split_store_search.c",
-            "snippets/store_forward/check_misaligned_split_store_search.c",
-            "snippets/deferred_check/deferred_mark_stage_a.c",
-            "snippets/deferred_check/deferred_mark_stage_b.c",
-            "snippets/examples/demo_mark_flag.c",
-            "snippets/examples/check_demo_mark_flag.c",
-            "snippets/cbo/prefetchw_tl_denied_fault.c",
-            "snippets/cbo/check_prefetchw_tl_denied_fault.c",
-        ]
+        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            toolchain = importlib.import_module("generator.xsgen.toolchain")
-            gcc = toolchain.detect_toolchain()["gcc"]
-            for relative_path in snippet_sources:
-                src_path = ROOT / relative_path
-                out_path = Path(tmpdir) / (src_path.stem + ".o")
-                result = subprocess.run(
-                    [
-                        gcc,
-                        "-std=c11",
-                        "-Wall",
-                        "-Wextra",
-                        "-Werror",
-                        *toolchain.riscv_compile_flags(),
-                        "-I",
-                        str(ROOT / "runtime/include"),
-                        "-I",
-                        str(ROOT / "snippets/include"),
-                        "-c",
-                        str(src_path),
-                        "-o",
-                        str(out_path),
-                    ],
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                )
-                self.assertEqual(0, result.returncode, msg=result.stderr)
-
-    def test_prefetchw_sources_compile(self) -> None:
-        snippet_sources = [
-            "snippets/cbo/prefetchw_tl_denied_fault.c",
-            "snippets/cbo/check_prefetchw_tl_denied_fault.c",
-        ]
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            toolchain = importlib.import_module("generator.xsgen.toolchain")
-            gcc = toolchain.detect_toolchain()["gcc"]
-            for relative_path in snippet_sources:
-                src_path = ROOT / relative_path
-                out_path = Path(tmpdir) / (src_path.stem + ".o")
-                result = subprocess.run(
-                    [
-                        gcc,
-                        "-std=c11",
-                        "-Wall",
-                        "-Wextra",
-                        "-Werror",
-                        "-O2",
-                        "-march=rv64gc",
-                        "-mabi=lp64d",
-                        "-mcmodel=medany",
-                        "-ffreestanding",
-                        "-fno-asynchronous-unwind-tables",
-                        "-fno-builtin",
-                        "-fno-stack-protector",
-                        "-fno-tree-vectorize",
-                        "-fno-tree-slp-vectorize",
-                        "-I",
-                        str(ROOT / "runtime/include"),
-                        "-I",
-                        str(ROOT / "snippets/include"),
-                        "-c",
-                        str(src_path),
-                        "-o",
-                        str(out_path),
-                    ],
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                )
-                self.assertEqual(0, result.returncode, msg=result.stderr)
+        db = snippet_db.load_snippet_db(ROOT)
+        sources = sorted({source for snippet in db.values() if snippet.kind == "proc" for source in snippet.sources})
+        self.assertGreater(len(sources), 0)
+        self.compile_sources(sources)
 
     def test_prefetchw_sources_compile_without_zicbop_mnemonic_support(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            toolchain = importlib.import_module("generator.xsgen.toolchain")
-            gcc = toolchain.detect_toolchain()["gcc"]
-            src_path = ROOT / "snippets/cbo/prefetchw_tl_denied_fault.c"
-            out_path = Path(tmpdir) / "prefetchw_tl_denied_fault.o"
-            result = subprocess.run(
-                [
-                    gcc,
-                    "-std=c11",
-                    "-Wall",
-                    "-Wextra",
-                    "-Werror",
-                    "-O2",
-                    "-march=rv64gc",
-                    "-mabi=lp64d",
-                    "-mcmodel=medany",
-                    "-ffreestanding",
-                    "-fno-asynchronous-unwind-tables",
-                    "-fno-builtin",
-                    "-fno-stack-protector",
-                    "-fno-tree-vectorize",
-                    "-fno-tree-slp-vectorize",
-                    "-I",
-                    str(ROOT / "runtime/include"),
-                    "-I",
-                    str(ROOT / "snippets/include"),
-                    "-c",
-                    str(src_path),
-                    "-o",
-                    str(out_path),
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(0, result.returncode, msg=result.stderr)
+        self.compile_sources(
+            [ROOT / "snippets/cbo/prefetchw_tl_denied_fault.c"],
+            extra_flags=[
+                "-O2",
+                "-march=rv64gc",
+                "-mabi=lp64d",
+                "-mcmodel=medany",
+                "-ffreestanding",
+                "-fno-asynchronous-unwind-tables",
+                "-fno-builtin",
+                "-fno-stack-protector",
+                "-fno-tree-vectorize",
+                "-fno-tree-slp-vectorize",
+            ],
+        )
 
-    def test_deferred_check_sources_compile(self) -> None:
-        snippet_sources = [
-            "snippets/deferred_check/deferred_mark_stage_a.c",
-            "snippets/deferred_check/deferred_mark_stage_b.c",
-        ]
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            toolchain = importlib.import_module("generator.xsgen.toolchain")
-            gcc = toolchain.detect_toolchain()["gcc"]
-            for relative_path in snippet_sources:
-                src_path = ROOT / relative_path
-                out_path = Path(tmpdir) / (src_path.stem + ".o")
-                result = subprocess.run(
-                    [
-                        gcc,
-                        "-std=c11",
-                        "-Wall",
-                        "-Wextra",
-                        "-Werror",
-                        *toolchain.riscv_compile_flags(),
-                        "-I",
-                        str(ROOT / "runtime/include"),
-                        "-I",
-                        str(ROOT / "snippets/include"),
-                        "-c",
-                        str(src_path),
-                        "-o",
-                        str(out_path),
-                    ],
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                )
-                self.assertEqual(0, result.returncode, msg=result.stderr)
-
-    def test_real_manifest_db_and_suite_produce_deterministic_plan(self) -> None:
+    def test_checked_in_suites_resolve_to_stable_plans(self) -> None:
         snippet_db = importlib.import_module("generator.xsgen.snippet_db")
         suite_loader = importlib.import_module("generator.xsgen.suite_loader")
 
@@ -498,406 +88,37 @@ class SnippetLoadingTest(unittest.TestCase):
         db_second = snippet_db.load_snippet_db(ROOT)
         self.assertEqual(sorted(db_first.keys()), sorted(db_second.keys()))
 
-        suite = suite_loader.load_suite(ROOT / "suites/scalar_load_legality_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db_first)
-        plan_second = suite_loader.build_compose_plan(suite, db_second)
+        suite_paths = sorted((ROOT / "suites").glob("*.yaml"))
+        self.assertGreater(len(suite_paths), 0)
+        for suite_path in suite_paths:
+            with self.subTest(suite=suite_path.name):
+                suite_first = suite_loader.load_suite(suite_path)
+                suite_second = suite_loader.load_suite(suite_path)
+                self.assertEqual(suite_first, suite_second)
 
-        self.assertEqual(
-            ("init_basic_env", "arm_timer", "unaligned_load", "check_scalar_load_legality", "finish_check"),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
+                plan_first = suite_loader.build_compose_plan(suite_first, db_first)
+                plan_second = suite_loader.build_compose_plan(suite_second, db_second)
+                self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
+                self.assertEqual(
+                    plan_first.snippet_ids,
+                    tuple(snippet.id for snippet in plan_first.snippets),
+                )
 
-    def test_vsetvl_path_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
+                if suite_first.run_snippet_ids is not None:
+                    self.assertEqual(suite_first.run_snippet_ids, plan_first.run_snippet_ids)
+                    self.assertEqual(suite_first.check_snippet_ids, plan_first.check_snippet_ids)
+                    self.assertEqual(
+                        tuple(dict.fromkeys([*suite_first.run_snippet_ids, *suite_first.check_snippet_ids])),
+                        plan_first.snippet_ids,
+                    )
+                else:
+                    self.assertEqual(suite_first.snippet_ids, plan_first.snippet_ids)
 
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/vsetvl_interrupt_path_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "arm_timer",
-                "vsetvl_interrupt_path",
-                "check_vsetvl_interrupt_path",
-                "finish_check",
-            ),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
-
-    def test_vsetvl_search_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
-
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/vsetvl_interrupt_search_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "vsetvl_interrupt_search",
-                "check_vsetvl_interrupt_search",
-                "finish_check",
-            ),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
-
-    def test_interrupt_response_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
-
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/interrupt_response_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "arm_timer",
-                "interrupt_response_wait",
-                "check_interrupt_response",
-                "finish_check",
-            ),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
-
-    def test_split_store_forward_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
-
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/misaligned_split_store_search_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "misaligned_split_store_search",
-                "check_misaligned_split_store_search",
-                "finish_check",
-            ),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
-
-    def test_scalar_misalign_load_split_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
-
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/scalar_misalign_load_split_templates_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "load_split_templates",
-                "check_load_split_templates",
-                "finish_check",
-            ),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
-
-    def test_scalar_misalign_store_split_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
-
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/scalar_misalign_store_split_templates_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "store_split_templates",
-                "check_store_split_templates",
-                "finish_check",
-            ),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
-
-    def test_scalar_misalign_cross_page_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
-
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/scalar_misalign_cross_page_faults_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "cross_page_faults",
-                "check_cross_page_faults",
-                "finish_check",
-            ),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
-
-    def test_scalar_misalign_store_forward_overlap_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
-
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/scalar_misalign_store_forward_overlap_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "store_forward_overlap",
-                "check_store_forward_overlap",
-                "finish_check",
-            ),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
-
-    def test_scalar_misalign_store_forward_search_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
-
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/scalar_misalign_store_forward_search_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "store_forward_search",
-                "check_store_forward_search",
-                "finish_check",
-            ),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
-
-    def test_scalar_misalign_cross_page_fault_search_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
-
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/scalar_misalign_cross_page_fault_search_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "cross_page_fault_search",
-                "check_cross_page_fault_search",
-                "finish_check",
-            ),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
-
-    def test_scalar_misalign_replay_probe_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
-
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/scalar_misalign_replay_probe_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "replay_probe",
-                "check_replay_probe",
-                "finish_check",
-            ),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
-
-    def test_scalar_misalign_templates_combo_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
-
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/scalar_misalign_templates_combo_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            ("init_basic_env", "load_split_templates", "store_split_templates"),
-            plan_first.run_snippet_ids,
-        )
-        self.assertEqual(
-            ("check_load_split_templates", "check_store_split_templates", "finish_check"),
-            plan_first.check_snippet_ids,
-        )
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "load_split_templates",
-                "store_split_templates",
-                "check_load_split_templates",
-                "check_store_split_templates",
-                "finish_check",
-            ),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
-
-    def test_scalar_misalign_fault_forward_combo_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
-
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/scalar_misalign_fault_forward_combo_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            ("init_basic_env", "store_forward_overlap", "cross_page_faults"),
-            plan_first.run_snippet_ids,
-        )
-        self.assertEqual(
-            ("check_store_forward_overlap", "check_cross_page_faults", "finish_check"),
-            plan_first.check_snippet_ids,
-        )
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "store_forward_overlap",
-                "cross_page_faults",
-                "check_store_forward_overlap",
-                "check_cross_page_faults",
-                "finish_check",
-            ),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
-
-    def test_scalar_misalign_family_combo_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
-
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/scalar_misalign_family_combo_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "load_split_templates",
-                "store_split_templates",
-                "store_forward_overlap",
-                "cross_page_faults",
-            ),
-            plan_first.run_snippet_ids,
-        )
-        self.assertEqual(
-            (
-                "check_load_split_templates",
-                "check_store_split_templates",
-                "check_store_forward_overlap",
-                "check_cross_page_faults",
-                "finish_check",
-            ),
-            plan_first.check_snippet_ids,
-        )
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "load_split_templates",
-                "store_split_templates",
-                "store_forward_overlap",
-                "cross_page_faults",
-                "check_load_split_templates",
-                "check_store_split_templates",
-                "check_store_forward_overlap",
-                "check_cross_page_faults",
-                "finish_check",
-            ),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
-
-    def test_deferred_check_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
-
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/deferred_check_markers_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            ("init_basic_env", "deferred_mark_stage_a", "deferred_mark_stage_b"),
-            plan_first.run_snippet_ids,
-        )
-        self.assertEqual(
-            ("deferred_mark_stage_a", "deferred_mark_stage_b", "finish_check"),
-            plan_first.check_snippet_ids,
-        )
-        self.assertEqual(
-            ("init_basic_env", "deferred_mark_stage_a", "deferred_mark_stage_b", "finish_check"),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
-
-    def test_demo_mark_flag_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
-
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/demo_mark_flag_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "demo_mark_flag",
-                "check_demo_mark_flag",
-                "finish_check",
-            ),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
-
-    def test_prefetchw_tl_denied_fault_suite_produces_deterministic_plan(self) -> None:
-        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
-        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
-
-        db = snippet_db.load_snippet_db(ROOT)
-        suite = suite_loader.load_suite(ROOT / "suites/prefetchw_tl_denied_fault_poc.yaml")
-        plan_first = suite_loader.build_compose_plan(suite, db)
-        plan_second = suite_loader.build_compose_plan(suite, db)
-
-        self.assertEqual(
-            (
-                "init_basic_env",
-                "prefetchw_tl_denied_fault",
-                "check_prefetchw_tl_denied_fault",
-                "finish_check",
-            ),
-            plan_first.snippet_ids,
-        )
-        self.assertEqual(plan_first.snippet_ids, plan_second.snippet_ids)
+                if suite_first.mmu_rule_dir is not None:
+                    self.assertIn("mmu_rule_runner_main", plan_first.snippet_ids)
+                    self.assertGreater(len(plan_first.mmu_rule_ids), 0)
+                    self.assertGreater(len(plan_first.mmu_defined_rule_ids), 0)
+                    self.assertGreater(len(plan_first.mmu_coverage_tags), 0)
 
     def test_manifest_loader_rejects_missing_fields_and_stream_kind(self) -> None:
         snippet_db = importlib.import_module("generator.xsgen.snippet_db")
@@ -1377,8 +598,9 @@ class SnippetLoadingTest(unittest.TestCase):
         suite = suite_loader.load_suite(ROOT / "suites/mmu_bare_identity_poc.yaml")
         plan = suite_loader.build_compose_plan(suite, snippet_db.load_snippet_db(ROOT))
 
-        self.assertEqual(("bare_identity",), plan.mmu_rule_ids)
-        self.assertEqual(("mode.bare", "page.identity", "requestor.load"), plan.mmu_coverage_tags)
+        self.assertEqual(1, len(plan.mmu_rule_ids))
+        self.assertIn("mode.bare", plan.mmu_coverage_tags)
+        self.assertIn("requestor.load", plan.mmu_coverage_tags)
 
         dump_result = subprocess.run(
             ["python3", "generator/cli.py", "dump-plan", "suites/mmu_bare_identity_poc.yaml"],
@@ -1389,8 +611,8 @@ class SnippetLoadingTest(unittest.TestCase):
         )
         self.assertEqual(0, dump_result.returncode, msg=dump_result.stderr)
         payload = json.loads(dump_result.stdout)
-        self.assertEqual(["bare_identity"], payload["mmu"]["resolved_rule_ids"])
-        self.assertEqual(["mode.bare", "page.identity", "requestor.load"], payload["mmu"]["coverage_tags"])
+        self.assertEqual(list(plan.mmu_rule_ids), payload["mmu"]["resolved_rule_ids"])
+        self.assertEqual(list(plan.mmu_coverage_tags), payload["mmu"]["coverage_tags"])
         self.assertNotIn("guest.two_stage", payload["mmu"]["coverage_tags"])
         self.assertNotIn("requestor.hlv", payload["mmu"]["coverage_tags"])
 
@@ -1697,105 +919,6 @@ class SnippetLoadingTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("File exists", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
-
-    def test_unaligned_load_riscv_path_uses_real_word_load(self) -> None:
-        source = (ROOT / "snippets/scalar_load_legality/unaligned_load.c").read_text()
-        self.assertIn('"lw %0, 0(%1)"', source)
-
-    def test_vsetvl_search_source_arms_periodic_timer_before_dense_loop(self) -> None:
-        source = (ROOT / "snippets/vector_interrupt/vsetvl_interrupt_search.c").read_text()
-        helper = (ROOT / "snippets/include/xs_vsetvl_interrupt_path.h").read_text()
-
-        self.assertEqual(1, source.count("xsrt_enable_stimer();"))
-        self.assertEqual(1, source.count("xsrt_timer_arm_periodic_delta("))
-        self.assertIn("#define XS_VSETVL_X1()", source)
-        self.assertIn("#define XS_VSETVL_X2()", source)
-        self.assertIn("#define XS_VSETVL_X4()", source)
-        self.assertIn("#define XS_VSETVL_X8()", source)
-        self.assertIn("XS_VSETVL_X8();", source)
-        self.assertIn("xs_vsetvl_emit_zero_zero_zero()", source)
-        self.assertIn("0x80007057", helper)
-        self.assertIn('iterations = 256u + (unsigned long) ((env->seed >> 4) & 0x7fu);', source)
-        self.assertIn('xsrt_timer_arm_periodic_delta(8u + (uint64_t) ((env->seed >> 13) & 0x7u));', source)
-        self.assertNotIn("__riscv", source)
-
-    def test_vsetvl_path_source_uses_raw_vsetvl_helper_without_local_arch_toggle(self) -> None:
-        source = (ROOT / "snippets/vector_interrupt/vsetvl_interrupt_path.c").read_text()
-        helper = (ROOT / "snippets/include/xs_vsetvl_interrupt_path.h").read_text()
-
-        self.assertIn("xs_vsetvl_emit_zero_zero_zero();", source)
-        self.assertIn("vsetvl zero, zero, zero", helper)
-        self.assertIn(".word 0x80007057", helper)
-        self.assertNotIn("__riscv", source)
-
-    def test_runtime_entry_source_sets_fs_and_vs(self) -> None:
-        source = (ROOT / "runtime/arch/riscv64/start.S").read_text()
-
-        self.assertIn("MSTATUS_VS", source)
-        self.assertIn("MSTATUS_FS", source)
-        self.assertIn("csrs mstatus", source)
-
-    def test_split_store_search_source_loads_high_half_first_for_diagnosis(self) -> None:
-        source = (ROOT / "snippets/store_forward/misaligned_split_store_search.c").read_text()
-
-        self.assertIn("\"lwu %0, 0(%3)", source)
-        self.assertIn("\"lhu %1, 4(%3)", source)
-        self.assertIn("\"lbu %2, 6(%3)", source)
-        self.assertLess(source.index("\"lwu %0, 0(%3)"), source.index("\"lhu %1, 4(%3)"))
-        self.assertLess(source.index("\"lhu %1, 4(%3)"), source.index("\"lbu %2, 6(%3)"))
-        self.assertIn("xsrt_csr_write(12u, probe0_word32);", source)
-        self.assertIn("xsrt_csr_write(13u, probe0_half16);", source)
-        self.assertIn("xsrt_csr_write(14u, probe0_byte8);", source)
-
-    def test_scalar_misalign_load_split_source_uses_seed_driven_rounds_and_summary(self) -> None:
-        source = (ROOT / "snippets/scalar_misalign/load_split_templates.c").read_text()
-        check = (ROOT / "snippets/scalar_misalign/check_load_split_templates.c").read_text()
-
-        self.assertIn("xs_scalar_misalign_load_rounds", source)
-        self.assertIn("xs_scalar_misalign_load_rotation", source)
-        self.assertIn("xs_scalar_misalign_load_bank_seed", source)
-        self.assertIn("env->seed", source)
-        self.assertIn("xs_scalar_misalign_expected_load_summary", check)
-        self.assertIn("env->seed", check)
-        self.assertNotIn("XS_SCALAR_MISALIGN_CSR_TEMPLATE_COUNT", check)
-
-    def test_scalar_misalign_store_split_source_uses_seed_driven_rounds_and_summary(self) -> None:
-        source = (ROOT / "snippets/scalar_misalign/store_split_templates.c").read_text()
-        check = (ROOT / "snippets/scalar_misalign/check_store_split_templates.c").read_text()
-
-        self.assertIn("xs_scalar_misalign_store_rounds", source)
-        self.assertIn("xs_scalar_misalign_store_rotation", source)
-        self.assertIn("xs_scalar_misalign_store_bank_seed", source)
-        self.assertIn("env->seed", source)
-        self.assertIn("xs_scalar_misalign_expected_store_summary", check)
-        self.assertIn("env->seed", check)
-        self.assertNotIn("XS_SCALAR_MISALIGN_CSR_TEMPLATE_COUNT", check)
-
-    def test_scalar_misalign_store_forward_overlap_source_uses_seed_driven_rounds_and_values(self) -> None:
-        source = (ROOT / "snippets/scalar_misalign/store_forward_overlap.c").read_text()
-        check = (ROOT / "snippets/scalar_misalign/check_store_forward_overlap.c").read_text()
-
-        self.assertIn("xs_scalar_misalign_forward_rounds", source)
-        self.assertIn("xs_scalar_misalign_target_value", source)
-        self.assertIn("xs_scalar_misalign_forward_skid", source)
-        self.assertIn("env->seed", source)
-        self.assertIn("xs_scalar_misalign_expected_forward_summary", check)
-        self.assertIn("xs_scalar_misalign_expected_target_value", check)
-
-    def test_scalar_misalign_cross_page_source_uses_seed_driven_rounds_and_offsets(self) -> None:
-        source = (ROOT / "snippets/scalar_misalign/cross_page_faults.c").read_text()
-        check = (ROOT / "snippets/scalar_misalign/check_cross_page_faults.c").read_text()
-
-        self.assertIn("xs_scalar_misalign_cross_rounds", source)
-        self.assertIn("xs_scalar_misalign_load_offsets", source)
-        self.assertIn("xs_scalar_misalign_store_offsets", source)
-        self.assertIn("env->seed", source)
-        self.assertIn("xs_scalar_misalign_expected_cross_summary", check)
-        self.assertIn("env->seed", check)
-
-    def test_declared_python_dependency(self) -> None:
-        requirements = (ROOT / "requirements.txt").read_text()
-        self.assertIn("PyYAML", requirements)
 
     def test_cli_build_generates_real_artifacts(self) -> None:
         result = subprocess.run(

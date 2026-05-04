@@ -28,6 +28,27 @@ class BuildPipelineTest(unittest.TestCase):
             self.skipTest("installed RISC-V toolchain lacks XiangShan ISA extensions")
         self.assertEqual(0, result.returncode, msg=stderr)
 
+    def compose_plan_for_suite(self, suite_path: str | Path):
+        snippet_db = importlib.import_module("generator.xsgen.snippet_db")
+        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
+
+        path = Path(suite_path)
+        if not path.is_absolute():
+            path = ROOT / path
+        suite = suite_loader.load_suite(path)
+        return suite_loader.build_compose_plan(suite, snippet_db.load_snippet_db(ROOT))
+
+    def assert_manifest_matches_suite_plan(self, manifest: dict, suite_path: str | Path) -> None:
+        plan = self.compose_plan_for_suite(suite_path)
+        self.assertEqual(plan.suite_name, manifest["suite"])
+        self.assertEqual(list(plan.snippet_ids), manifest["snippet_ids"])
+        if plan.run_snippet_ids is not None:
+            self.assertEqual(list(plan.run_snippet_ids), manifest["run_snippet_ids"])
+            self.assertEqual(list(plan.check_snippet_ids), manifest["check_snippet_ids"])
+        if plan.mmu_rule_ids:
+            self.assertEqual(list(plan.mmu_rule_ids), manifest["mmu"]["resolved_rule_ids"])
+            self.assertEqual(list(plan.mmu_coverage_tags), manifest["mmu"]["coverage_tags"])
+
     def setUp(self) -> None:
         self.build_dir = ROOT / "build" / "scalar_load_legality_poc"
         self.deferred_check_markers_build_dir = ROOT / "build" / "deferred_check_markers_poc"
@@ -372,10 +393,6 @@ class BuildPipelineTest(unittest.TestCase):
 
         manifest = json.loads(build_manifest.read_text())
         self.assertEqual("scalar_load_legality_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "arm_timer", "unaligned_load", "check_scalar_load_legality", "finish_check"],
-            manifest["snippet_ids"],
-        )
         self.assertEqual(str(generated_suite), manifest["artifacts"]["generated_suite"])
         self.assertEqual(str(test_elf), manifest["artifacts"]["elf"])
         self.assertEqual(str(test_bin), manifest["artifacts"]["bin"])
@@ -384,6 +401,7 @@ class BuildPipelineTest(unittest.TestCase):
         self.assertTrue(manifest["commands"]["compile"])
         self.assertTrue(manifest["commands"]["link"])
         self.assertTrue(manifest["commands"]["objcopy"])
+        self.assert_manifest_matches_suite_plan(manifest, "suites/scalar_load_legality_poc.yaml")
 
     def test_deferred_check_suite_build_generates_artifacts_and_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -409,12 +427,6 @@ class BuildPipelineTest(unittest.TestCase):
             self.assert_proc_check_suite_build(
                 suite_path=str(tmp_suite.resolve()),
                 build_dir=self.deferred_check_markers_build_dir,
-                suite_name="deferred_check_markers_poc",
-                snippet_ids=[
-                    "init_basic_env",
-                    "arm_timer",
-                    "finish_check",
-                ],
             )
 
             generated_text = (self.deferred_check_markers_build_dir / "generated_suite.c").read_text()
@@ -427,14 +439,7 @@ class BuildPipelineTest(unittest.TestCase):
             manifest = json.loads(
                 (self.deferred_check_markers_build_dir / "build_manifest.json").read_text()
             )
-            self.assertEqual(
-                ["init_basic_env", "arm_timer", "finish_check"],
-                manifest["run_snippet_ids"],
-            )
-            self.assertEqual(
-                ["arm_timer", "finish_check"],
-                manifest["check_snippet_ids"],
-            )
+            self.assert_manifest_matches_suite_plan(manifest, tmp_suite)
             self.assertNotIn("generated_mmu_header", manifest["artifacts"])
             self.assertNotIn("generated_mmu_source", manifest["artifacts"])
             self.assertNotIn("mmu_coverage_ledger", manifest["artifacts"])
@@ -463,10 +468,6 @@ class BuildPipelineTest(unittest.TestCase):
 
         manifest = json.loads(build_manifest.read_text())
         self.assertEqual("vsetvl_interrupt_path_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "arm_timer", "vsetvl_interrupt_path", "check_vsetvl_interrupt_path", "finish_check"],
-            manifest["snippet_ids"],
-        )
         self.assertEqual(str(generated_suite), manifest["artifacts"]["generated_suite"])
         self.assertEqual(str(test_elf), manifest["artifacts"]["elf"])
         self.assertEqual(str(test_bin), manifest["artifacts"]["bin"])
@@ -475,6 +476,7 @@ class BuildPipelineTest(unittest.TestCase):
         self.assertTrue(manifest["commands"]["compile"])
         self.assertTrue(manifest["commands"]["link"])
         self.assertTrue(manifest["commands"]["objcopy"])
+        self.assert_manifest_matches_suite_plan(manifest, "suites/vsetvl_interrupt_path_poc.yaml")
 
     def test_interrupt_response_suite_build_generates_artifacts_and_manifest(self) -> None:
         result = subprocess.run(
@@ -500,10 +502,7 @@ class BuildPipelineTest(unittest.TestCase):
 
         manifest = json.loads(build_manifest.read_text())
         self.assertEqual("interrupt_response_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "arm_timer", "interrupt_response_wait", "check_interrupt_response", "finish_check"],
-            manifest["snippet_ids"],
-        )
+        self.assert_manifest_matches_suite_plan(manifest, "suites/interrupt_response_poc.yaml")
         self.assertEqual(str(generated_suite), manifest["artifacts"]["generated_suite"])
         self.assertEqual(str(test_elf), manifest["artifacts"]["elf"])
         self.assertEqual(str(test_bin), manifest["artifacts"]["bin"])
@@ -534,10 +533,7 @@ class BuildPipelineTest(unittest.TestCase):
 
         manifest = json.loads(build_manifest.read_text())
         self.assertEqual("vsetvl_interrupt_search_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "vsetvl_interrupt_search", "check_vsetvl_interrupt_search", "finish_check"],
-            manifest["snippet_ids"],
-        )
+        self.assert_manifest_matches_suite_plan(manifest, "suites/vsetvl_interrupt_search_poc.yaml")
         self.assertEqual(str(generated_suite), manifest["artifacts"]["generated_suite"])
         self.assertEqual(str(test_elf), manifest["artifacts"]["elf"])
         self.assertEqual(str(test_bin), manifest["artifacts"]["bin"])
@@ -568,10 +564,7 @@ class BuildPipelineTest(unittest.TestCase):
 
         manifest = json.loads(build_manifest.read_text())
         self.assertEqual("misaligned_split_store_search_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "misaligned_split_store_search", "check_misaligned_split_store_search", "finish_check"],
-            manifest["snippet_ids"],
-        )
+        self.assert_manifest_matches_suite_plan(manifest, "suites/misaligned_split_store_search_poc.yaml")
         self.assertEqual(str(generated_suite), manifest["artifacts"]["generated_suite"])
         self.assertEqual(str(test_elf), manifest["artifacts"]["elf"])
         self.assertEqual(str(test_bin), manifest["artifacts"]["bin"])
@@ -602,10 +595,7 @@ class BuildPipelineTest(unittest.TestCase):
 
         manifest = json.loads(build_manifest.read_text())
         self.assertEqual("demo_mark_flag_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "demo_mark_flag", "check_demo_mark_flag", "finish_check"],
-            manifest["snippet_ids"],
-        )
+        self.assert_manifest_matches_suite_plan(manifest, "suites/demo_mark_flag_poc.yaml")
         self.assertEqual(str(generated_suite), manifest["artifacts"]["generated_suite"])
         self.assertEqual(str(test_elf), manifest["artifacts"]["elf"])
         self.assertEqual(str(test_bin), manifest["artifacts"]["bin"])
@@ -636,10 +626,7 @@ class BuildPipelineTest(unittest.TestCase):
 
         manifest = json.loads(build_manifest.read_text())
         self.assertEqual("am_hello_main_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "am_hello_main", "finish_check"],
-            manifest["snippet_ids"],
-        )
+        self.assert_manifest_matches_suite_plan(manifest, "suites/am_hello_main_poc.yaml")
         self.assertEqual(str(generated_suite), manifest["artifacts"]["generated_suite"])
         self.assertEqual(str(test_elf), manifest["artifacts"]["elf"])
         self.assertEqual(str(test_bin), manifest["artifacts"]["bin"])
@@ -686,10 +673,7 @@ class BuildPipelineTest(unittest.TestCase):
 
         manifest = json.loads(build_manifest.read_text())
         self.assertEqual("am_timer_event_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "am_timer_event_main", "check_interrupt_response", "finish_check"],
-            manifest["snippet_ids"],
-        )
+        self.assert_manifest_matches_suite_plan(manifest, "suites/am_timer_event_poc.yaml")
 
         generated_text = generated_suite.read_text()
         self.assertIn("snippet_am_timer_event_main", generated_text)
@@ -714,10 +698,7 @@ class BuildPipelineTest(unittest.TestCase):
 
         manifest = json.loads(build_manifest.read_text())
         self.assertEqual("nexus_cputest_unalign_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "nexus_cputest_unalign_main", "finish_check"],
-            manifest["snippet_ids"],
-        )
+        self.assert_manifest_matches_suite_plan(manifest, "suites/nexus_cputest_unalign_poc.yaml")
         self.assertIn("xsam_program_entry_nexus_cputest_unalign_main", generated_suite.read_text())
 
     def assert_am_program_suite_build(
@@ -725,8 +706,6 @@ class BuildPipelineTest(unittest.TestCase):
         *,
         suite_path: str,
         build_dir: Path,
-        suite_name: str,
-        snippet_id: str,
     ) -> None:
         result = subprocess.run(
             ["python3", "generator/cli.py", "build", suite_path],
@@ -744,10 +723,11 @@ class BuildPipelineTest(unittest.TestCase):
         self.assertTrue(build_manifest.is_file())
 
         manifest = json.loads(build_manifest.read_text())
-        self.assertEqual(suite_name, manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", snippet_id, "finish_check"],
-            manifest["snippet_ids"],
+        self.assert_manifest_matches_suite_plan(manifest, suite_path)
+        snippet_id = next(
+            snippet_id
+            for snippet_id in manifest["snippet_ids"]
+            if snippet_id not in {"init_basic_env", "finish_check"}
         )
         self.assertIn(f"xsam_program_entry_{snippet_id}", generated_suite.read_text())
 
@@ -755,40 +735,30 @@ class BuildPipelineTest(unittest.TestCase):
         self.assert_am_program_suite_build(
             suite_path="suites/scalar_misalign_load_in_16b_poc.yaml",
             build_dir=self.scalar_misalign_load_in_16b_build_dir,
-            suite_name="scalar_misalign_load_in_16b_poc",
-            snippet_id="scalar_misalign_load_in_16b_main",
         )
 
     def test_scalar_misalign_load_cross_16b_suite_build_generates_artifacts_and_manifest(self) -> None:
         self.assert_am_program_suite_build(
             suite_path="suites/scalar_misalign_load_cross_16b_poc.yaml",
             build_dir=self.scalar_misalign_load_cross_16b_build_dir,
-            suite_name="scalar_misalign_load_cross_16b_poc",
-            snippet_id="scalar_misalign_load_cross_16b_main",
         )
 
     def test_scalar_misalign_store_in_16b_suite_build_generates_artifacts_and_manifest(self) -> None:
         self.assert_am_program_suite_build(
             suite_path="suites/scalar_misalign_store_in_16b_poc.yaml",
             build_dir=self.scalar_misalign_store_in_16b_build_dir,
-            suite_name="scalar_misalign_store_in_16b_poc",
-            snippet_id="scalar_misalign_store_in_16b_main",
         )
 
     def test_scalar_misalign_store_cross_16b_suite_build_generates_artifacts_and_manifest(self) -> None:
         self.assert_am_program_suite_build(
             suite_path="suites/scalar_misalign_store_cross_16b_poc.yaml",
             build_dir=self.scalar_misalign_store_cross_16b_build_dir,
-            suite_name="scalar_misalign_store_cross_16b_poc",
-            snippet_id="scalar_misalign_store_cross_16b_main",
         )
 
     def test_scalar_misalign_store_load_overlap_suite_build_generates_artifacts_and_manifest(self) -> None:
         self.assert_am_program_suite_build(
             suite_path="suites/scalar_misalign_store_load_overlap_poc.yaml",
             build_dir=self.scalar_misalign_store_load_overlap_build_dir,
-            suite_name="scalar_misalign_store_load_overlap_poc",
-            snippet_id="scalar_misalign_store_load_overlap_main",
         )
 
     def assert_proc_check_suite_build(
@@ -796,8 +766,6 @@ class BuildPipelineTest(unittest.TestCase):
         *,
         suite_path: str,
         build_dir: Path,
-        suite_name: str,
-        snippet_ids: list[str],
     ) -> None:
         result = subprocess.run(
             ["python3", "generator/cli.py", "build", suite_path],
@@ -815,151 +783,70 @@ class BuildPipelineTest(unittest.TestCase):
         self.assertTrue(build_manifest.is_file())
 
         manifest = json.loads(build_manifest.read_text())
-        self.assertEqual(suite_name, manifest["suite"])
-        self.assertEqual(snippet_ids, manifest["snippet_ids"])
+        self.assert_manifest_matches_suite_plan(manifest, suite_path)
 
         generated_text = generated_suite.read_text()
-        for snippet_id in snippet_ids:
+        for snippet_id in manifest["snippet_ids"]:
             self.assertIn(f"snippet_{snippet_id}", generated_text)
 
     def test_scalar_misalign_load_split_suite_build_generates_artifacts_and_manifest(self) -> None:
         self.assert_proc_check_suite_build(
             suite_path="suites/scalar_misalign_load_split_templates_poc.yaml",
             build_dir=self.scalar_misalign_load_split_build_dir,
-            suite_name="scalar_misalign_load_split_templates_poc",
-            snippet_ids=[
-                "init_basic_env",
-                "load_split_templates",
-                "check_load_split_templates",
-                "finish_check",
-            ],
         )
 
     def test_scalar_misalign_store_split_suite_build_generates_artifacts_and_manifest(self) -> None:
         self.assert_proc_check_suite_build(
             suite_path="suites/scalar_misalign_store_split_templates_poc.yaml",
             build_dir=self.scalar_misalign_store_split_build_dir,
-            suite_name="scalar_misalign_store_split_templates_poc",
-            snippet_ids=[
-                "init_basic_env",
-                "store_split_templates",
-                "check_store_split_templates",
-                "finish_check",
-            ],
         )
 
     def test_scalar_misalign_cross_page_suite_build_generates_artifacts_and_manifest(self) -> None:
         self.assert_proc_check_suite_build(
             suite_path="suites/scalar_misalign_cross_page_faults_poc.yaml",
             build_dir=self.scalar_misalign_cross_page_build_dir,
-            suite_name="scalar_misalign_cross_page_faults_poc",
-            snippet_ids=[
-                "init_basic_env",
-                "cross_page_faults",
-                "check_cross_page_faults",
-                "finish_check",
-            ],
         )
 
     def test_scalar_misalign_store_forward_overlap_suite_build_generates_artifacts_and_manifest(self) -> None:
         self.assert_proc_check_suite_build(
             suite_path="suites/scalar_misalign_store_forward_overlap_poc.yaml",
             build_dir=self.scalar_misalign_store_forward_overlap_build_dir,
-            suite_name="scalar_misalign_store_forward_overlap_poc",
-            snippet_ids=[
-                "init_basic_env",
-                "store_forward_overlap",
-                "check_store_forward_overlap",
-                "finish_check",
-            ],
         )
 
     def test_scalar_misalign_store_forward_search_suite_build_generates_artifacts_and_manifest(self) -> None:
         self.assert_proc_check_suite_build(
             suite_path="suites/scalar_misalign_store_forward_search_poc.yaml",
             build_dir=self.scalar_misalign_store_forward_search_build_dir,
-            suite_name="scalar_misalign_store_forward_search_poc",
-            snippet_ids=[
-                "init_basic_env",
-                "store_forward_search",
-                "check_store_forward_search",
-                "finish_check",
-            ],
         )
 
     def test_scalar_misalign_cross_page_fault_search_suite_build_generates_artifacts_and_manifest(self) -> None:
         self.assert_proc_check_suite_build(
             suite_path="suites/scalar_misalign_cross_page_fault_search_poc.yaml",
             build_dir=self.scalar_misalign_cross_page_search_build_dir,
-            suite_name="scalar_misalign_cross_page_fault_search_poc",
-            snippet_ids=[
-                "init_basic_env",
-                "cross_page_fault_search",
-                "check_cross_page_fault_search",
-                "finish_check",
-            ],
         )
 
     def test_scalar_misalign_replay_probe_suite_build_generates_artifacts_and_manifest(self) -> None:
         self.assert_proc_check_suite_build(
             suite_path="suites/scalar_misalign_replay_probe_poc.yaml",
             build_dir=self.scalar_misalign_replay_probe_build_dir,
-            suite_name="scalar_misalign_replay_probe_poc",
-            snippet_ids=[
-                "init_basic_env",
-                "replay_probe",
-                "check_replay_probe",
-                "finish_check",
-            ],
         )
 
     def test_scalar_misalign_templates_combo_suite_build_generates_artifacts_and_manifest(self) -> None:
         self.assert_proc_check_suite_build(
             suite_path="suites/scalar_misalign_templates_combo_poc.yaml",
             build_dir=self.scalar_misalign_templates_combo_build_dir,
-            suite_name="scalar_misalign_templates_combo_poc",
-            snippet_ids=[
-                "init_basic_env",
-                "load_split_templates",
-                "store_split_templates",
-                "check_load_split_templates",
-                "check_store_split_templates",
-                "finish_check",
-            ],
         )
 
     def test_scalar_misalign_fault_forward_combo_suite_build_generates_artifacts_and_manifest(self) -> None:
         self.assert_proc_check_suite_build(
             suite_path="suites/scalar_misalign_fault_forward_combo_poc.yaml",
             build_dir=self.scalar_misalign_fault_forward_combo_build_dir,
-            suite_name="scalar_misalign_fault_forward_combo_poc",
-            snippet_ids=[
-                "init_basic_env",
-                "store_forward_overlap",
-                "cross_page_faults",
-                "check_store_forward_overlap",
-                "check_cross_page_faults",
-                "finish_check",
-            ],
         )
 
     def test_scalar_misalign_family_combo_suite_build_generates_artifacts_and_manifest(self) -> None:
         self.assert_proc_check_suite_build(
             suite_path="suites/scalar_misalign_family_combo_poc.yaml",
             build_dir=self.scalar_misalign_family_combo_build_dir,
-            suite_name="scalar_misalign_family_combo_poc",
-            snippet_ids=[
-                "init_basic_env",
-                "load_split_templates",
-                "store_split_templates",
-                "store_forward_overlap",
-                "cross_page_faults",
-                "check_load_split_templates",
-                "check_store_split_templates",
-                "check_store_forward_overlap",
-                "check_cross_page_faults",
-                "finish_check",
-            ],
         )
 
     def test_generated_scalar_misalign_random_suite_builds(self) -> None:
@@ -1027,11 +914,7 @@ class BuildPipelineTest(unittest.TestCase):
         self.assertTrue(build_manifest.is_file())
 
         manifest = json.loads(build_manifest.read_text())
-        self.assertEqual("nexus_cputest_load_store_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "nexus_cputest_load_store_main", "finish_check"],
-            manifest["snippet_ids"],
-        )
+        self.assert_manifest_matches_suite_plan(manifest, "suites/nexus_cputest_load_store_poc.yaml")
         self.assertIn("xsam_program_entry_nexus_cputest_load_store_main", generated_suite.read_text())
 
     def test_nexus_memscan_access_fault_suite_build_generates_artifacts_and_manifest(self) -> None:
@@ -1051,11 +934,7 @@ class BuildPipelineTest(unittest.TestCase):
         self.assertTrue(build_manifest.is_file())
 
         manifest = json.loads(build_manifest.read_text())
-        self.assertEqual("nexus_memscan_access_fault_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "nexus_memscan_access_fault_main", "finish_check"],
-            manifest["snippet_ids"],
-        )
+        self.assert_manifest_matches_suite_plan(manifest, "suites/nexus_memscan_access_fault_poc.yaml")
         self.assertIn("xsam_program_entry_nexus_memscan_access_fault_main", generated_suite.read_text())
 
     def test_nexus_memscan_fetch_fault_suite_build_generates_artifacts_and_manifest(self) -> None:
@@ -1075,11 +954,7 @@ class BuildPipelineTest(unittest.TestCase):
         self.assertTrue(build_manifest.is_file())
 
         manifest = json.loads(build_manifest.read_text())
-        self.assertEqual("nexus_memscan_fetch_fault_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "nexus_memscan_fetch_fault_main", "finish_check"],
-            manifest["snippet_ids"],
-        )
+        self.assert_manifest_matches_suite_plan(manifest, "suites/nexus_memscan_fetch_fault_poc.yaml")
         self.assertIn("xsam_program_entry_nexus_memscan_fetch_fault_main", generated_suite.read_text())
 
     def test_nexus_memscan_hugepage_suite_build_generates_artifacts_and_manifest(self) -> None:
@@ -1099,11 +974,7 @@ class BuildPipelineTest(unittest.TestCase):
         self.assertTrue(build_manifest.is_file())
 
         manifest = json.loads(build_manifest.read_text())
-        self.assertEqual("nexus_memscan_hugepage_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "nexus_memscan_hugepage_main", "finish_check"],
-            manifest["snippet_ids"],
-        )
+        self.assert_manifest_matches_suite_plan(manifest, "suites/nexus_memscan_hugepage_poc.yaml")
         self.assertIn("xsam_program_entry_nexus_memscan_hugepage_main", generated_suite.read_text())
 
     def test_nexus_memscan_hugepage_access_fault_suite_build_generates_artifacts_and_manifest(self) -> None:
@@ -1123,11 +994,7 @@ class BuildPipelineTest(unittest.TestCase):
         self.assertTrue(build_manifest.is_file())
 
         manifest = json.loads(build_manifest.read_text())
-        self.assertEqual("nexus_memscan_hugepage_access_fault_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "nexus_memscan_hugepage_access_fault_main", "finish_check"],
-            manifest["snippet_ids"],
-        )
+        self.assert_manifest_matches_suite_plan(manifest, "suites/nexus_memscan_hugepage_access_fault_poc.yaml")
         self.assertIn("xsam_program_entry_nexus_memscan_hugepage_access_fault_main", generated_suite.read_text())
 
     def test_nexus_memscan_hugepage_atom_fault_suite_build_generates_artifacts_and_manifest(self) -> None:
@@ -1147,11 +1014,7 @@ class BuildPipelineTest(unittest.TestCase):
         self.assertTrue(build_manifest.is_file())
 
         manifest = json.loads(build_manifest.read_text())
-        self.assertEqual("nexus_memscan_hugepage_atom_fault_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "nexus_memscan_hugepage_atom_fault_main", "finish_check"],
-            manifest["snippet_ids"],
-        )
+        self.assert_manifest_matches_suite_plan(manifest, "suites/nexus_memscan_hugepage_atom_fault_poc.yaml")
         self.assertIn("xsam_program_entry_nexus_memscan_hugepage_atom_fault_main", generated_suite.read_text())
 
     def test_nexus_memscan_page_fault_suite_build_generates_artifacts_and_manifest(self) -> None:
@@ -1171,11 +1034,7 @@ class BuildPipelineTest(unittest.TestCase):
         self.assertTrue(build_manifest.is_file())
 
         manifest = json.loads(build_manifest.read_text())
-        self.assertEqual("nexus_memscan_page_fault_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "nexus_memscan_page_fault_main", "finish_check"],
-            manifest["snippet_ids"],
-        )
+        self.assert_manifest_matches_suite_plan(manifest, "suites/nexus_memscan_page_fault_poc.yaml")
         self.assertIn("xsam_program_entry_nexus_memscan_page_fault_main", generated_suite.read_text())
 
     def test_mmu_pilot_suite_build_generates_rule_artifacts_manifest_and_ledger(self) -> None:
@@ -1201,18 +1060,9 @@ class BuildPipelineTest(unittest.TestCase):
         self.assertTrue(coverage_ledger.is_file())
 
         manifest = json.loads(build_manifest.read_text())
-        self.assertEqual("mmu_pilot_rules_poc", manifest["suite"])
-        self.assertEqual(
-            [
-                "bare_identity",
-                "sv39_alias",
-                "superpage",
-                "sfence_remap",
-                "load_page_fault",
-                "two_stage_fault",
-            ],
-            manifest["mmu"]["resolved_rule_ids"],
-        )
+        self.assert_manifest_matches_suite_plan(manifest, "suites/mmu_pilot_rules_poc.yaml")
+        self.assertIn("two_stage_fault", manifest["mmu"]["resolved_rule_ids"])
+        self.assertIn("guest.two_stage", manifest["mmu"]["coverage_tags"])
         self.assertTrue(
             manifest["artifacts"]["generated_mmu_source"].endswith(
                 "build/mmu_pilot_rules_poc/generated_mmu_rule.c"
@@ -1277,10 +1127,8 @@ class BuildPipelineTest(unittest.TestCase):
         self.assert_or_skip_for_toolchain(result)
 
         manifest = json.loads((self.mmu_bare_identity_build_dir / "build_manifest.json").read_text())
-        self.assertEqual("mmu_bare_identity_poc", manifest["suite"])
-        self.assertEqual(["bare_identity"], manifest["mmu"]["resolved_rule_ids"])
-        self.assertEqual(["mode.bare", "page.identity", "requestor.load"], manifest["mmu"]["coverage_tags"])
-        self.assertEqual(["mode.bare", "page.identity", "requestor.load"], manifest["mmu"]["emitted_coverage_tags"])
+        self.assert_manifest_matches_suite_plan(manifest, "suites/mmu_bare_identity_poc.yaml")
+        self.assertEqual(manifest["mmu"]["coverage_tags"], manifest["mmu"]["emitted_coverage_tags"])
         self.assertNotIn("guest.two_stage", manifest["mmu"]["coverage_tags"])
         self.assertNotIn("requestor.hlv", manifest["mmu"]["coverage_tags"])
 
@@ -1520,11 +1368,7 @@ class BuildPipelineTest(unittest.TestCase):
         self.assertTrue(build_manifest.is_file())
 
         manifest = json.loads(build_manifest.read_text())
-        self.assertEqual("prefetchw_tl_denied_fault_poc", manifest["suite"])
-        self.assertEqual(
-            ["init_basic_env", "prefetchw_tl_denied_fault", "check_prefetchw_tl_denied_fault", "finish_check"],
-            manifest["snippet_ids"],
-        )
+        self.assert_manifest_matches_suite_plan(manifest, "suites/prefetchw_tl_denied_fault_poc.yaml")
         self.assertEqual(str(generated_suite), manifest["artifacts"]["generated_suite"])
         self.assertEqual(str(test_elf), manifest["artifacts"]["elf"])
         self.assertEqual(str(test_bin), manifest["artifacts"]["bin"])

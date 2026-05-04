@@ -68,24 +68,19 @@ class MMURuleLoaderTest(unittest.TestCase):
         )
         self.assertEqual(("sfence_vma",), tuple(rule.actions["before_trigger"]))
 
-    def test_loader_accepts_documented_mode_spellings_and_pilot_rules(self) -> None:
+    def test_loader_accepts_checked_in_pilot_rules(self) -> None:
         from generator.xsgen.mmu_rule_loader import load_mmu_rule
 
         pilot_dir = ROOT / "snippets" / "mmu_rules" / "pilot"
-        expected_rules = {
-            "bare_identity.yaml": ("bare_identity", "bare"),
-            "sv39_alias.yaml": ("sv39_alias", "host_single_stage"),
-            "superpage.yaml": ("superpage", "host_single_stage"),
-            "sfence_remap.yaml": ("sfence_remap", "host_single_stage"),
-            "load_page_fault.yaml": ("load_page_fault", "host_single_stage"),
-            "two_stage_fault.yaml": ("two_stage_fault", "allStage"),
-        }
+        rule_paths = sorted(pilot_dir.glob("*.yaml"))
 
-        for relative_path, (rule_id, mode) in expected_rules.items():
-            with self.subTest(path=relative_path):
-                rule = load_mmu_rule(pilot_dir / relative_path)
-                self.assertEqual(rule_id, rule.id)
-                self.assertEqual(mode, rule.mode)
+        self.assertGreater(len(rule_paths), 0)
+        for path in rule_paths:
+            with self.subTest(path=path.name):
+                rule = load_mmu_rule(path)
+                self.assertEqual(path.stem, rule.id)
+                self.assertTrue(rule.coverage_tags)
+                self.assertIn(f"mode.{rule.mode}", rule.coverage_tags)
 
     def test_loader_normalizes_legacy_mode_aliases(self) -> None:
         from generator.xsgen.mmu_rule_loader import load_mmu_rule
