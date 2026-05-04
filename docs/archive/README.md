@@ -1,6 +1,6 @@
 # Archive
 
-This directory holds planning and draft material that is useful for historical context but is not the primary user-facing entry point anymore.
+This directory holds material that is useful for historical context but is no longer a primary user-facing entry point.
 
 ## Archived Files
 
@@ -16,6 +16,12 @@ This directory holds planning and draft material that is useful for historical c
   - path-oriented `vsetvl` draft document
 - `2026-04-10-vsetvl-real-run-alignment-plan.md`
   - real-run alignment implementation plan
+- `2026-04-12-git-push-debug-log.md`
+  - one-off remote push troubleshooting log
+- `2026-04-17-dev-checkpoint.md`
+  - historical `dev` branch checkpoint after the Nexus-AM-style baseline landed
+- `release-notes-2026-04-11.md`
+  - old release snapshot from the initial run-pipeline period
 - `2026-04-24-mmu-interface-inventory.md`
   - historical inventory mapping legacy `mmutest` responsibilities to the `snippetgen` MMU runtime and rule surface
 - `2026-04-24-mmu-spec-in-case-out-interface-design.md`
@@ -34,4 +40,4 @@ For normal usage, start from:
 - [`../../README.md`](../../README.md)
 - [`../2026-04-10-xiangshan-emu-workload-howto.md`](../2026-04-10-xiangshan-emu-workload-howto.md)
 - [`../mmu-spec-in-case-out.md`](../mmu-spec-in-case-out.md)
-- [`../release-notes-2026-04-11.md`](../release-notes-2026-04-11.md)
+- [`../2026-04-27-kmh-mmu-layer1-run-notes.md`](../2026-04-27-kmh-mmu-layer1-run-notes.md)

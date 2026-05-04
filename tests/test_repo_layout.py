@@ -46,7 +46,6 @@ class RepoLayoutTest(unittest.TestCase):
             ROOT / "docs" / "README.md",
             ROOT / "docs" / "2026-04-10-xiangshan-emu-workload-howto.md",
             ROOT / "docs" / "2026-04-10-vsetvl-hang-investigation-notes.md",
-            ROOT / "docs" / "release-notes-2026-04-11.md",
         ]
 
         for path in docs_to_check:

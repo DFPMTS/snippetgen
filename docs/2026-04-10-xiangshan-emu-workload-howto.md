@@ -255,6 +255,6 @@ At the time of this document update:
 - the misaligned split-store search case has a reproducible `abort` path on a pre-fix XiangShan tree
 - the `vsetvl` interrupt search case has a common-path `abort` repro at `--seed 4658 --batch-id repro_4658_default`
 
-For a higher-level summary, see:
+For the current documentation index, see:
 
-- [`release-notes-2026-04-11.md`](release-notes-2026-04-11.md)
+- [`README.md`](README.md)
