@@ -1,16 +1,39 @@
 # SnippetGen Demo
 
-ELF-first baremetal snippet generator workspace for XiangShan-oriented workload construction, build, and run.
+An **ELF-first** baremetal snippet generator tailored for **XiangShan** workload construction and verification. It automates the full evaluation lifecycle:
+**Suite YAML** => **Harness Gen** => **Build Artifacts (ELF/Bin)** => **XiangShan Run** => **Metadata**
 
-This repository is now beyond the initial skeleton stage. It can:
+## Core Model
 
-- load snippet manifests and suite YAMLs
-- generate a deterministic harness
-- build `test.elf`, `test.bin`, and `disasm`
-- run workloads on XiangShan `emu`
-- record structured run results under `build/<suite>/runs/`
-- keep path-oriented and bug-hunting suites side by side
-- generate MMU rule-driven pilot cases from structured YAML specs
+SnippetGen is built around a small set of objects:
+
+- **suite**: the top-level YAML workload composition under `suites/`. It selects snippets, MMU rules, seeds, target settings, and build/run metadata.
+- **snippet**: a reusable workload building block, usually declared by metadata under `snippets/manifests/` and implemented under `snippets/`.
+- **generated harness**: the deterministic C entry point emitted by SnippetGen. It wires selected snippets or MMU rules into one baremetal program.
+- **target adapter**: target-specific run logic under `targets/`. The XiangShan adapter launches `emu`, captures logs, classifies traps, and writes run metadata.
+- **MMU rule**: a structured YAML rule under `snippets/mmu_rules/` that describes requestor, translation mode, setup, trigger, expected result, observations, and coverage tags.
+- **runner profile**: a reusable prebuilt XiangShan/NEMU runner pair, so Kunminghu v2/v3 binaries can be built once and reused across runs.
+
+## Prerequisites
+
+Build-only workflows need:
+
+- Python 3
+- Python dependencies from `requirements.txt`
+- a RISC-V toolchain in `PATH`
+
+XiangShan run workflows additionally need:
+
+- `NOOP_HOME/build/verilator-compile/emu` is available
+- `NEMU_HOME/build/riscv64-nemu-interpreter-so` is available
+- `SNIPPETGEN_XS_ENV_SH` points to your local `xs-env/env.sh` and `source "$SNIPPETGEN_XS_ENV_SH"` has been executed
+
+LightSSS wave dumps on abort or bad trap are optional. If you need them, the external XiangShan tree must also be prepared correctly:
+
+- the `emu` must be trace-enabled, for example with `EMU_TRACE=fst`
+- the local `emu.cpp` must preserve the LightSSS abort/bad-trap wakeup and `wave_path` handling
+
+This repository does not vendor the external XiangShan tree. That setup remains a local integration step.
 
 ## Quick Start
 
@@ -80,40 +103,121 @@ make repro-vsetvl
 make repro-split-store
 ```
 
-## Repository Map
+## CLI Reference
 
-### Core directories
+Run commands from the repository root with `python3 generator/cli.py <command> ...`.
 
-- `generator/`: CLI, suite loading, harness emission, build, run orchestration
-- `runtime/`
-  - baremetal runtime used by generated workloads
-- `snippets/`
-  - concrete workload building blocks
-- `suites/`
-  - ordered snippet compositions
-- `targets/`
-  - target-specific run adapters
-- `tests/`
-  - loader, build, and run pipeline regression tests
-- `docs/`
-  - user docs, release notes, investigations, archived plans
+| Command             | Purpose                                                  |
+| ------------------- | -------------------------------------------------------- |
+| `list-snippets`     | List available snippet manifests.                        |
+| `list-suite-pools`  | List configured suite generation pools.                  |
+| `dump-plan <suite>` | Print the resolved suite plan without building.          |
+| `build [suite]`     | Generate the harness and build ELF/bin/disasm artifacts. |
+| `run <suite>`       | Build and run one suite on the selected target.          |
+| `generate-suites`   | Generate YAML suites from configured suite pools.        |
 
-### Important entry files
+`run` requires exactly one seed selector:
 
-- `generator/cli.py`
-  - top-level `build`, `run`, and `dump-plan` commands
-- `generator/xsgen/emitter.py`
-  - emits `generated_suite.c`
-- `generator/xsgen/toolchain.py`
-  - compiles, links, runs `objcopy`, emits `disasm`
-- `generator/xsgen/run_batch.py`
-  - batch run orchestration and ledger emission
-- `generator/xsgen/mmu_rule_loader.py`
-  - MMU rule schema validation and coverage taxonomy
-- `generator/xsgen/mmu_rule_emitter.py`
-  - emits `generated_mmu_rule.h`, `generated_mmu_rule.c`, and `mmu_coverage_ledger.json`
-- `targets/xiangshan-verilator/run_target.py`
-  - XiangShan `emu` adapter
+| Option               | Purpose                                    |
+| -------------------- | ------------------------------------------ |
+| `--seed <N>`         | Run one deterministic seed.                |
+| `--seeds <A,B,C>`    | Run an explicit comma-separated seed list. |
+| `--seed-range <A:B>` | Run a deterministic seed range.            |
+
+Additional `run` options:
+
+| Option                    | Purpose                                                                                            |
+| ------------------------- | -------------------------------------------------------------------------------------------------- |
+| `--batch-id <name>`       | Use a stable run directory under `build/<suite>/runs/`. Useful for repros and regression evidence. |
+| `--jobs <N>`              | Run multiple seeds in parallel when the target adapter supports it.                                |
+| `--timeout-sec <N>`       | Override the per-run timeout.                                                                      |
+| `--runner-profile <name>` | Use a reusable prebuilt XiangShan/NEMU runner profile, for example a Kunminghu v2 or v3 profile.   |
+
+For the parser-defined interface, run:
+
+```bash
+python3 generator/cli.py --help
+python3 generator/cli.py run --help
+```
+
+## Project Layout
+
+### Source Tree
+
+```text
+snippetgen/
+  generator/
+    cli.py                    # build/run/dump-plan entry point
+    xsgen/
+      emitter.py              # emits generated_suite.c
+      toolchain.py            # compiles ELF/bin/disasm artifacts
+      run_batch.py            # multi-seed run orchestration and ledgers
+      mmu_rule_loader.py      # MMU rule schema validation and coverage taxonomy
+      mmu_rule_emitter.py     # emits generated_mmu_rule.{h,c} and coverage ledger
+      runner_profiles.py      # reusable XiangShan/Kunminghu runner profiles
+  runtime/                    # bare-metal runtime linked into generated programs
+  snippets/
+    manifests/                # snippet metadata
+    programs/                 # standalone AM-style or custom program entries
+    mmu_rules/                # structured MMU rule databases
+  suites/                     # YAML workload compositions
+  targets/
+    xiangshan-verilator/      # XiangShan emu target adapter
+  tests/                      # loader, build, run, runtime, and MMU regressions
+  docs/                       # guides, run notes, investigations, archived plans
+```
+
+### Generated Outputs
+
+Build-only commands write artifacts under `build/<suite>/`:
+
+```text
+build/<suite>/
+  generated_suite.c
+  test.elf
+  test.bin
+  disasm
+  build_manifest.json
+  generated_mmu_rule.h        # only for MMU rule suites
+  generated_mmu_rule.c        # only for MMU rule suites
+  mmu_coverage_ledger.json    # only for MMU rule suites
+```
+
+Run commands write seed-isolated artifacts under `build/<suite>/runs/<batch_id>/`:
+
+```text
+build/<suite>/runs/
+  <batch_id>/
+    batch_meta.json
+    seed_<N>/
+      generated_suite.c
+      test.elf
+      test.bin
+      disasm
+      stdout.log
+      stderr.log
+      run_meta.json
+      generated_mmu_rule.h        # only for MMU rule suites
+      generated_mmu_rule.c        # only for MMU rule suites
+      mmu_coverage_ledger.json    # only for MMU rule suites
+      lightsss-wave               # only on abort/bad-trap when external tracing is active
+```
+
+### Where To Start
+
+| Task                                 | Start Here                                  |
+| ------------------------------------ | ------------------------------------------- |
+| Build or run a suite                 | `generator/cli.py`                          |
+| Understand suite composition         | target YAML under `suites/`                 |
+| Understand generated harnesses       | `generator/xsgen/emitter.py`                |
+| Debug build artifacts                | `generator/xsgen/toolchain.py`              |
+| Debug batch run metadata             | `generator/xsgen/run_batch.py`              |
+| Debug XiangShan emu invocation       | `targets/xiangshan-verilator/run_target.py` |
+| Add or inspect MMU rules             | `snippets/mmu_rules/`                       |
+| Debug MMU rule parsing               | `generator/xsgen/mmu_rule_loader.py`        |
+| Debug MMU generated C output         | `generator/xsgen/mmu_rule_emitter.py`       |
+| Use prebuilt Kunminghu v2/v3 runners | `generator/xsgen/runner_profiles.py`        |
+| Find expected behavior               | relevant tests under `tests/`               |
 
 ## Stable Suites
 
@@ -237,102 +341,12 @@ Observed result:
   - `ABORT at pc = 0x800002ac`
 - `seed_4658/lightsss-wave` is dumped beside the logs when the external XiangShan LightSSS patch is active
 
-## XiangShan Run Requirements
+## Further Reading
 
-The XiangShan adapter assumes:
+The full documentation index lives in [`docs/README.md`](docs/README.md).
 
-- `SNIPPETGEN_XS_ENV_SH` points to your local `xs-env/env.sh`
-- `source "$SNIPPETGEN_XS_ENV_SH"` has been executed
-- `NOOP_HOME/build/verilator-compile/emu` is available
-- `NEMU_HOME/build/riscv64-nemu-interpreter-so` is available
+Common entry points:
 
-If you need LightSSS wave dump on abort, the external XiangShan tree must also be prepared correctly:
-
-- the `emu` must be trace-enabled, for example with `EMU_TRACE=fst`
-- the local `emu.cpp` must preserve the LightSSS abort/bad-trap wakeup and `wave_path` handling
-
-This repository does not vendor the external XiangShan tree. That setup remains a local integration step.
-
-## Artifact Layout
-
-### Build-only layout
-
-```text
-build/<suite>/
-  generated_suite.c
-  test.elf
-  test.bin
-  disasm
-  build_manifest.json
-  generated_mmu_rule.h     # only for MMU rule suites
-  generated_mmu_rule.c     # only for MMU rule suites
-  mmu_coverage_ledger.json # only for MMU rule suites
-```
-
-### Build-plus-run layout
-
-```text
-build/<suite>/runs/
-  <batch_id>/
-    batch_meta.json
-    seed_<N>/
-      generated_suite.c
-      test.elf
-      test.bin
-      disasm
-      stdout.log
-      stderr.log
-      run_meta.json
-      generated_mmu_rule.h     # only for MMU rule suites
-      generated_mmu_rule.c     # only for MMU rule suites
-      mmu_coverage_ledger.json # only for MMU rule suites
-      lightsss-wave        # only on abort/bad-trap when external XiangShan tracing is active
-```
-
-## Documentation Index
-
-### Start here
-
-- [`docs/2026-04-10-xiangshan-emu-workload-howto.md`](docs/2026-04-10-xiangshan-emu-workload-howto.md)
-  - practical XiangShan `emu` build/run guide
-- [`docs/mmu-spec-in-case-out.md`](docs/mmu-spec-in-case-out.md)
-  - MMU rule schema, generated artifacts, pilot suite, and coverage ledger guide
-- [`docs/release-notes-2026-04-11.md`](docs/release-notes-2026-04-11.md)
-  - what changed in this snapshot
-
-### Investigation notes
-
-- [`docs/2026-04-10-vsetvl-hang-investigation-notes.md`](docs/2026-04-10-vsetvl-hang-investigation-notes.md)
-  - `vsetvl` and interrupt investigation trail
-
-### Archived planning material
-
-- [`docs/archive/README.md`](docs/archive/README.md)
-  - archived drafts, requirements, and implementation plans
-
-## For Agents
-
-If you are an AI agent entering this repository cold, use this order:
-
-1. Read `README.md`
-2. Read the target suite YAML in `suites/`
-3. For MMU suites, read `docs/mmu-spec-in-case-out.md` and the selected rules in `snippets/mmu_rules/`
-4. Read the referenced snippet manifests in `snippets/manifests/`
-5. Read the snippet sources under `snippets/`
-6. Read `generator/cli.py`, `emitter.py`, `toolchain.py`, `run_batch.py`, and the MMU loader/emitter when relevant
-7. Read `tests/test_snippet_loading.py`, `tests/test_build_pipeline.py`, `tests/test_run_pipeline.py`, and the MMU-focused tests when relevant
-
-Recommended first commands:
-
-```bash
-python3 generator/cli.py dump-plan suites/misaligned_split_store_search_poc.yaml
-python3 generator/cli.py build suites/misaligned_split_store_search_poc.yaml
-python3 generator/cli.py dump-plan suites/mmu_pilot_rules_poc.yaml
-python3 -m unittest tests.test_snippet_loading tests.test_build_pipeline
-```
-
-Avoid assumptions about:
-
-- external XiangShan tree state
-- whether LightSSS wave dump is patched in that external tree
-- whether a pre-fix or post-fix `emu` is being used
+- [`docs/2026-04-10-xiangshan-emu-workload-howto.md`](docs/2026-04-10-xiangshan-emu-workload-howto.md): XiangShan `emu` build/run guide.
+- [`docs/mmu-spec-in-case-out.md`](docs/mmu-spec-in-case-out.md): MMU rule schema and coverage ledger guide.
+- [`docs/2026-04-27-kmh-mmu-layer1-run-notes.md`](docs/2026-04-27-kmh-mmu-layer1-run-notes.md): Kunminghu v2/v3 MMU layer-1 notes.

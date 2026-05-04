@@ -19,11 +19,23 @@ Use this as the project-local operating guide for `snippetgen`. It keeps agents 
 ## Reading Order
 
 1. `README.md`
-2. Target suite in `suites/`
+2. Target suite YAML in `suites/`
 3. For MMU work, `docs/mmu-spec-in-case-out.md` and selected rules in `snippets/mmu_rules/`
 4. Referenced manifests in `snippets/manifests/`
-5. Referenced sources in `snippets/`, `runtime/`, or `generator/xsgen/`
-6. Focused tests in `tests/`
+5. Referenced sources in `snippets/` and `runtime/`
+6. `generator/cli.py` and relevant pipeline files under `generator/xsgen/`
+7. Focused tests in `tests/`, especially `tests/test_snippet_loading.py`, `tests/test_build_pipeline.py`, `tests/test_run_pipeline.py`, and MMU-focused tests when relevant
+
+## First Commands
+
+Use these as low-cost orientation checks before editing unfamiliar paths:
+
+```bash
+python3 generator/cli.py dump-plan suites/misaligned_split_store_search_poc.yaml
+python3 generator/cli.py build suites/misaligned_split_store_search_poc.yaml
+python3 generator/cli.py dump-plan suites/mmu_pilot_rules_poc.yaml
+python3 -m unittest tests.test_snippet_loading tests.test_build_pipeline
+```
 
 ## Common Workflows
 
@@ -60,6 +72,7 @@ python3 generator/cli.py build suites/mmu_pilot_rules_poc.yaml
 - Use stable `--seed` and `--batch-id` values for repros.
 - Do not claim target success unless logs show a semantic result such as `HIT GOOD TRAP` and metadata records `finish_code: 0`.
 - Keep generated run artifacts under `build/`; do not commit machine evidence unless the user explicitly asks.
+- Avoid assuming the external XiangShan tree state, whether LightSSS wave dumping is patched, or whether the selected `emu` is pre-fix or post-fix.
 
 ## Verification Matrix
 
