@@ -66,6 +66,16 @@ python3 generator/cli.py build suites/mmu_pilot_rules_poc.yaml
 - For runtime surface changes, check `tests/test_runtime_surface.py`, `tests/test_am_program_snippet_runtime.py`, `tests/test_mmu_runtime_surface.py`, and CTE/VME tests as relevant.
 - For run classification changes, check `tests/test_run_pipeline.py`.
 
+## Testing Policy
+
+- Tests should protect behavior, contracts, and debug-relevant artifacts. Do not add tests that only assert repository layout, checked-in file existence, or a hand-maintained source list.
+- Prefer deriving expected suite, snippet, MMU rule, and coverage data from the loader or compose plan. Avoid duplicating YAML contents as exact lists inside tests.
+- Use exact assertions for stable public contracts: CLI errors, manifest schema, ledger states, trap classification, emitted ABI fields, generated artifact paths, and target-visible instruction sequences.
+- Avoid source-text assertions for local implementation names, helper function names, seed formulas, or macro scaffolding. If behavior matters, validate it through compile, build, disassembly, loader output, manifest content, ledger content, or a host/runtime smoke test.
+- For snippet compilation coverage, load manifests and compile the referenced `proc` sources instead of maintaining a separate source inventory. `am_program` snippets should be covered by build-pipeline tests because they need wrapper/generated headers.
+- MMU inventory tests should check semantic coverage axes and rule invariants, not complete rule-id snapshots. Keep v2/v3 suite checks focused on intentional policy such as v3 excluding vector rules.
+- When a test becomes a parallel checklist that must be edited for every ordinary file move or suite composition change, delete it or rewrite it as a semantic check.
+
 ### Run on XiangShan
 
 - Use `SNIPPETGEN_XS_ENV_SH=/path/to/xs-env/env.sh` and source it, or set `XS_PROJECT_ROOT`, `NEMU_HOME`, and `NOOP_HOME` explicitly.
@@ -76,7 +86,7 @@ python3 generator/cli.py build suites/mmu_pilot_rules_poc.yaml
 
 ## Verification Matrix
 
-- Docs-only: `git diff --check`, `python3 -m unittest tests.test_repo_layout -v`.
+- Docs-only: `git diff --check`; run focused docs-adjacent tests only when docs change generated examples or command references.
 - Suite/schema changes: add `dump-plan` and focused loader/build tests.
 - Generator/runtime changes: run focused tests plus `python3 -m unittest discover -s tests -v`.
 - Target-semantics claims: run the relevant XiangShan suite and inspect `batch_meta.json`, `run_meta.json`, `stdout.log`, and any coverage ledger.
