@@ -1,0 +1,21 @@
+id: load_access_fault
+requestor: load
+mode: host_single_stage
+setup:
+  mappings:
+    - name: load_access_page
+      va: 0xb00002000
+      pa: 0x81024000
+      perms: [r, a]
+      fault: true
+trigger:
+  op: load
+  addr: load_access_page
+expect:
+  result: access_fault
+observe:
+  - fault_cause_match
+coverage_tags:
+  - requestor.load
+  - mode.host_single_stage
+  - exception.access_fault

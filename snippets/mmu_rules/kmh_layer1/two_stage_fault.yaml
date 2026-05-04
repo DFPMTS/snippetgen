@@ -1,0 +1,34 @@
+id: two_stage_fault
+requestor: hlv
+mode: allStage
+setup:
+  mappings:
+    - name: guest_stage1
+      va: 0xc00000000
+      pa: 0x80400000
+      perms: [r, a]
+    - name: guest_stage2
+      va: 0x80400000
+      pa: 0x80401000
+      perms: [r, a]
+      stage: stage2
+      fault: true
+actions:
+  before_trigger:
+    - enter_vs
+  handler:
+    - repair_fault_mapping
+  post_check:
+    - record_fault_snapshot
+trigger:
+  op: hlv_load
+  addr: guest_stage1
+expect:
+  result: guest_page_fault
+observe:
+  - fault_cause_match
+coverage_tags:
+  - requestor.hlv
+  - mode.allStage
+  - guest.two_stage
+  - exception.guest_page_fault

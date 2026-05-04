@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "name": "kmh-v2/difftest",
+      "xiangshan_revision": "<kunminghu-v2-git-revision>",
+      "xiangshan_embedded_commit": "<commit-id-module-short-sha>",
+      "xiangshan_embedded_dirty": false,
+      "nemu_revision": "<nemu-git-revision>",
+      "config": "KunminghuV2Config",
+      "build_summary": "Kunminghu v2 difftest emu; vector-enabled MMU cases may be scheduled in v2 suites.",
+      "generated_at": "2026-04-27T00:00:00+08:00",
+      "difftest": true,
+      "wave": false,
+      "emu": "kmh-v2/difftest/emu",
+      "nemu": "kmh-v2/difftest/riscv64-nemu-interpreter-so",
+      "emu_sha256": "<sha256>",
+      "nemu_sha256": "<sha256>"
+    },
+    {
+      "name": "kmh-v3/difftest",
+      "xiangshan_revision": "<kunminghu-v3-git-revision>",
+      "xiangshan_embedded_commit": "<commit-id-module-short-sha>",
+      "xiangshan_embedded_dirty": false,
+      "nemu_revision": "<nemu-git-revision>",
+      "config": "KunminghuV2Config",
+      "build_summary": "Kunminghu v3 difftest emu; first-wave suites exclude vector instruction cases. The branch may still expose the Kunminghu CHI config under the deprecated KunminghuV2Config class name.",
+      "generated_at": "2026-04-27T00:00:00+08:00",
+      "difftest": true,
+      "wave": false,
+      "emu": "kmh-v3/difftest/emu",
+      "nemu": "kmh-v3/difftest/riscv64-nemu-interpreter-so",
+      "emu_sha256": "<sha256>",
+      "nemu_sha256": "<sha256>"
+    }
+  ]
+}

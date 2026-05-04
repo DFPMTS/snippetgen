@@ -1,0 +1,25 @@
+id: all_stage_hlv_hit
+requestor: hlv
+mode: allStage
+setup:
+  mappings:
+    - name: guest_stage1
+      va: 0xc00002000
+      pa: 0x80404000
+      perms: [r, a]
+    - name: guest_stage2
+      stage: stage2
+      va: 0x80404000
+      pa: 0x80405000
+      perms: [r, a]
+trigger:
+  op: guest_load
+  addr: guest_stage1
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.hlv
+  - mode.allStage
+  - guest.two_stage

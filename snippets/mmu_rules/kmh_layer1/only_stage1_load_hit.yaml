@@ -1,0 +1,19 @@
+id: only_stage1_load_hit
+requestor: load
+mode: onlyStage1
+setup:
+  mappings:
+    - name: only_stage1_page
+      va: 0x900010000
+      pa: 0x81031000
+      perms: [r, a, d]
+trigger:
+  op: load
+  addr: only_stage1_page
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.load
+  - mode.onlyStage1

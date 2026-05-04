@@ -1,0 +1,32 @@
+id: satp_asid_switch
+requestor: load
+mode: host_single_stage
+preconditions:
+  csr:
+    satp_asid: 5
+setup:
+  mappings:
+    - name: satp_context_page
+      va: 0x900080000
+      pa: 0x81038000
+      perms: [r, a, d]
+    - name: satp_context_page_switched
+      context: switch
+      va: 0x900080000
+      pa: 0x81039000
+      perms: [r, a, d]
+actions:
+  before_trigger:
+    - switch_satp_context
+trigger:
+  op: load
+  addr: satp_context_page
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.load
+  - mode.host_single_stage
+  - ctrl.satp
+  - ctrl.asid

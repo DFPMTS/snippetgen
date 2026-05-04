@@ -1,0 +1,24 @@
+id: host_pma_mmio_attribute
+requestor: load
+mode: host_single_stage
+setup:
+  attributes:
+    pma: io
+    mmio: true
+  mappings:
+    - name: mmio_attr_page
+      va: 0x900070000
+      pa: 0x3800b000
+      perms: [r, a, d]
+trigger:
+  op: load
+  addr: 0x900070ff8
+expect:
+  result: hit
+observe:
+  - attribute_policy_match
+coverage_tags:
+  - requestor.load
+  - mode.host_single_stage
+  - attr.pma
+  - attr.mmio

@@ -11,6 +11,17 @@ MMU_RULE_FLAG_IDENTITY = 1 << 0
 MMU_RULE_FLAG_SUPERPAGE = 1 << 1
 MMU_RULE_FLAG_FAULT = 1 << 2
 MMU_RULE_FLAG_STAGE2 = 1 << 3
+MMU_RULE_FLAG_RAW_PTE = 1 << 4
+MMU_RULE_FLAG_SWITCH_CONTEXT = 1 << 5
+MMU_RULE_CSR_MXR = 1 << 0
+MMU_RULE_CSR_SUM = 1 << 1
+MMU_RULE_ATTR_PBMT_NC = 1 << 0
+MMU_RULE_ATTR_PMA = 1 << 1
+MMU_RULE_ATTR_MMIO = 1 << 2
+MMU_RULE_RETRY_NONE = 0
+MMU_RULE_RETRY_REPAIR_THEN_REEXECUTE = 1
+PTE_PBMT_MASK = 0x3 << 61
+PTE_PBMT_NC_VALUE = 0x1 << 61
 
 PTE_PERM_BITS = {
     "r": "XSAM_MMU_PTE_R",
@@ -20,6 +31,14 @@ PTE_PERM_BITS = {
     "g": "XSAM_MMU_PTE_G",
     "a": "XSAM_MMU_PTE_A",
     "d": "XSAM_MMU_PTE_D",
+}
+PTE_RAW_BITS = {
+    "v": "XSAM_MMU_PTE_V",
+    **PTE_PERM_BITS,
+}
+PTE_PBMT_BITS = {
+    "nc": "XS_GENERATED_MMU_PTE_PBMT_NC",
+    "io": "XS_GENERATED_MMU_PTE_PBMT_IO",
 }
 STAGE_VALUES = {"stage1", "stage2"}
 MAPPING_KIND_VALUES = {"identity", "alias", "superpage"}
@@ -104,6 +123,13 @@ def _mapping_flags(mapping: dict[str, object], *, va: int, pa: int, rule_id: str
         raise ValueError(f"MMU rule {rule_id} mapping has unsupported stage: {stage}")
     if stage == "stage2":
         flags |= MMU_RULE_FLAG_STAGE2
+    if mapping.get("raw_pte") is not None:
+        flags |= MMU_RULE_FLAG_RAW_PTE
+    context = mapping.get("context", "initial")
+    if context == "switch":
+        flags |= MMU_RULE_FLAG_SWITCH_CONTEXT
+    elif context != "initial":
+        raise ValueError(f"MMU rule {rule_id} mapping has unsupported context: {context}")
 
     return flags
 
@@ -121,6 +147,155 @@ def _mapping_perm_expr(perms: object, rule_id: str) -> str:
         seen.add(perm)
         bits.append(PTE_PERM_BITS[perm])
     return " | ".join(bits)
+
+
+def _mapping_raw_pte_expr(mapping: dict[str, object], *, pa: int, rule_id: str) -> str:
+    raw_pte = mapping.get("raw_pte")
+    if raw_pte is None:
+        return "0ull"
+    if not isinstance(raw_pte, dict):
+        raise ValueError(f"MMU rule {rule_id} raw_pte must be a YAML mapping")
+
+    value = raw_pte.get("value")
+    if value is not None:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(f"MMU rule {rule_id} raw_pte.value must be an integer")
+        return _c_uint(value)
+
+    bits = raw_pte.get("bits")
+    if not isinstance(bits, list) or not bits:
+        raise ValueError(f"MMU rule {rule_id} raw_pte.bits must be a non-empty list")
+    expr_parts = [_c_uint((pa >> 12) << 10)]
+    seen: set[str] = set()
+    for bit in bits:
+        if bit not in PTE_RAW_BITS:
+            raise ValueError(f"MMU rule {rule_id} raw_pte has unsupported bit: {bit}")
+        if bit in seen:
+            continue
+        seen.add(bit)
+        expr_parts.append(PTE_RAW_BITS[bit])
+
+    pbmt = raw_pte.get("pbmt")
+    if pbmt is not None:
+        if pbmt not in PTE_PBMT_BITS:
+            raise ValueError(f"MMU rule {rule_id} raw_pte has unsupported pbmt: {pbmt}")
+        expr_parts.append(PTE_PBMT_BITS[pbmt])
+
+    return " | ".join(expr_parts)
+
+
+def _csr_mapping(rule: MMURule) -> dict[str, object]:
+    csr = rule.preconditions.get("csr", {})
+    if csr is None:
+        return {}
+    if not isinstance(csr, dict):
+        raise ValueError(f"MMU rule {rule.id} field 'preconditions.csr' must be a YAML mapping")
+    return dict(csr)
+
+
+def _csr_flag_expr(rule: MMURule) -> str:
+    csr = _csr_mapping(rule)
+    flags: list[str] = []
+    if csr.get("mxr") is True:
+        flags.append("XS_GENERATED_MMU_CSR_MXR")
+    if csr.get("sum") is True:
+        flags.append("XS_GENERATED_MMU_CSR_SUM")
+    return " | ".join(flags) if flags else "0u"
+
+
+def _csr_int(rule: MMURule, key: str, default: int) -> int:
+    csr = _csr_mapping(rule)
+    value = csr.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"MMU rule {rule.id} field 'preconditions.csr.{key}' must be a non-negative integer")
+    return value
+
+
+def _raw_pte_has_pbmt_nc(raw_pte: object) -> bool:
+    if not isinstance(raw_pte, dict):
+        return False
+    if raw_pte.get("pbmt") == "nc":
+        return True
+    value = raw_pte.get("value")
+    return (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and (value & PTE_PBMT_MASK) == PTE_PBMT_NC_VALUE
+    )
+
+
+def _attr_flag_expr(rule: MMURule) -> str:
+    raw_attributes = rule.setup.get("attributes", {})
+    if raw_attributes is None:
+        raw_attributes = {}
+    if not isinstance(raw_attributes, dict):
+        raise ValueError(f"MMU rule {rule.id} field 'setup.attributes' must be a YAML mapping")
+
+    flags: list[str] = []
+    pbmt = raw_attributes.get("pbmt")
+    pma = raw_attributes.get("pma")
+    if pbmt == "nc":
+        flags.append("XS_GENERATED_MMU_ATTR_PBMT_NC")
+    if pma in {"io", "mmio"}:
+        flags.append("XS_GENERATED_MMU_ATTR_PMA")
+    if raw_attributes.get("mmio") is True and "XS_GENERATED_MMU_ATTR_MMIO" not in flags:
+        flags.append("XS_GENERATED_MMU_ATTR_MMIO")
+
+    raw_mappings = rule.setup.get("mappings", [])
+    if isinstance(raw_mappings, list):
+        for mapping in raw_mappings:
+            if not isinstance(mapping, dict):
+                continue
+            if (
+                _raw_pte_has_pbmt_nc(mapping.get("raw_pte"))
+                and "XS_GENERATED_MMU_ATTR_PBMT_NC" not in flags
+            ):
+                flags.append("XS_GENERATED_MMU_ATTR_PBMT_NC")
+
+    return " | ".join(flags) if flags else "0u"
+
+
+def _pmp_config(rule: MMURule) -> tuple[int, int, int, str]:
+    raw_pmp = rule.setup.get("pmp", {})
+    if raw_pmp is None:
+        raw_pmp = {}
+    if not isinstance(raw_pmp, dict):
+        raise ValueError(f"MMU rule {rule.id} field 'setup.pmp' must be a YAML mapping")
+    deny_napot = raw_pmp.get("deny_napot")
+    if deny_napot is None:
+        return 0, 0, 0, "0u"
+    if not isinstance(deny_napot, dict):
+        raise ValueError(f"MMU rule {rule.id} field 'setup.pmp.deny_napot' must be a YAML mapping")
+
+    register = deny_napot.get("register", 1)
+    size = deny_napot.get("size", 65536)
+    if isinstance(register, bool) or not isinstance(register, int) or register < 0:
+        raise ValueError(f"MMU rule {rule.id} field 'setup.pmp.deny_napot.register' must be a non-negative integer")
+    if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
+        raise ValueError(f"MMU rule {rule.id} field 'setup.pmp.deny_napot.size' must be a positive integer")
+    permissions = deny_napot.get("permissions", [])
+    if not isinstance(permissions, list):
+        raise ValueError(f"MMU rule {rule.id} field 'setup.pmp.deny_napot.permissions' must be a list")
+    perm_bits: list[str] = []
+    for permission in permissions:
+        if permission == "r":
+            perm_bits.append("XSAM_XS_PMP_R")
+        elif permission == "w":
+            perm_bits.append("XSAM_XS_PMP_W")
+        elif permission == "x":
+            perm_bits.append("XSAM_XS_PMP_X")
+        else:
+            raise ValueError(f"MMU rule {rule.id} has unsupported PMP permission: {permission}")
+    return 1, register, size, " | ".join(perm_bits) if perm_bits else "0u"
+
+
+def _retry_kind_expr(rule: MMURule) -> str:
+    retry = rule.expect.get("retry", "none")
+    if retry == "none":
+        return "XS_GENERATED_MMU_RETRY_NONE"
+    if retry == "repair_then_reexecute":
+        return "XS_GENERATED_MMU_RETRY_REPAIR_THEN_REEXECUTE"
+    raise ValueError(f"MMU rule {rule.id} has unsupported retry kind: {retry}")
 
 
 def _emit_string_array(name: str, values: tuple[str, ...], source_lines: list[str]) -> None:
@@ -160,6 +335,7 @@ def _emit_mapping_array(rule: MMURule, symbol: str, source_lines: list[str]) -> 
         pa = _resolve_address(raw_mapping.get("pa"), mapping_vas=mapping_vas, field_name=f"mappings.{mapping['name']}.pa", rule_id=rule.id)
         flags = _mapping_flags(raw_mapping, va=va, pa=pa, rule_id=rule.id)
         perm_expr = _mapping_perm_expr(raw_mapping.get("perms"), rule.id)
+        raw_pte_expr = _mapping_raw_pte_expr(raw_mapping, pa=pa, rule_id=rule.id)
         page_count = raw_mapping.get("page_count", 1)
         source_lines.extend(
             [
@@ -168,6 +344,7 @@ def _emit_mapping_array(rule: MMURule, symbol: str, source_lines: list[str]) -> 
                 f"        .va = {_c_uint(va)},",
                 f"        .pa = {_c_uint(pa)},",
                 f"        .prot = {perm_expr},",
+                f"        .raw_pte = {raw_pte_expr},",
                 f"        .flags = {flags}u,",
                 f"        .page_count = {page_count}u,",
                 "    },",
@@ -202,6 +379,7 @@ def _emit_rule_desc(rule: MMURule, source_lines: list[str]) -> tuple[str, tuple[
         (result, rule.requestor),
         ("0", "0"),
     )
+    pmp_deny, pmp_reg, pmp_size, pmp_permissions = _pmp_config(rule)
 
     trigger_op = str(rule.trigger.get("op", "load"))
     trigger_addr_value = rule.trigger.get("addr")
@@ -238,6 +416,16 @@ def _emit_rule_desc(rule: MMURule, source_lines: list[str]) -> tuple[str, tuple[
             f"    .secondary_addr = {_c_uint(secondary_addr)},",
             f"    .fault_mask = {mask_name},",
             f"    .expected_cause = {cause_name},",
+            f"    .csr_flags = {_csr_flag_expr(rule)},",
+            f"    .satp_asid = {_c_uint(_csr_int(rule, 'satp_asid', 1))},",
+            f"    .vsatp_asid = {_c_uint(_csr_int(rule, 'vsatp_asid', 3))},",
+            f"    .hgatp_vmid = {_c_uint(_csr_int(rule, 'hgatp_vmid', 2))},",
+            f"    .pmp_deny = {pmp_deny}u,",
+            f"    .pmp_reg = {_c_uint(pmp_reg)},",
+            f"    .pmp_size = {_c_uint(pmp_size)},",
+            f"    .pmp_permissions = {pmp_permissions},",
+            f"    .attr_flags = {_attr_flag_expr(rule)},",
+            f"    .retry_kind = {_retry_kind_expr(rule)},",
             f"    .mapping_count = sizeof({mapping_array_name}) / sizeof({mapping_array_name}[0]),",
             f"    .mappings = {mapping_array_name},",
             (
@@ -453,6 +641,7 @@ def emit_mmu_rule_artifacts(
         "    uintptr_t va;",
         "    uintptr_t pa;",
         "    uintptr_t prot;",
+        "    uintptr_t raw_pte;",
         "    uint32_t flags;",
         "    size_t page_count;",
         "} xs_generated_mmu_mapping_t;",
@@ -468,6 +657,16 @@ def emit_mmu_rule_artifacts(
         "    uintptr_t secondary_addr;",
         "    uint32_t fault_mask;",
         "    uintptr_t expected_cause;",
+        "    uint32_t csr_flags;",
+        "    uintptr_t satp_asid;",
+        "    uintptr_t vsatp_asid;",
+        "    uintptr_t hgatp_vmid;",
+        "    uint32_t pmp_deny;",
+        "    uintptr_t pmp_reg;",
+        "    uintptr_t pmp_size;",
+        "    uint8_t pmp_permissions;",
+        "    uint32_t attr_flags;",
+        "    uint32_t retry_kind;",
         "    size_t mapping_count;",
         "    const xs_generated_mmu_mapping_t *mappings;",
         "    size_t before_action_count;",
@@ -486,6 +685,17 @@ def emit_mmu_rule_artifacts(
         f"enum {{ XS_GENERATED_MMU_FLAG_SUPERPAGE = {MMU_RULE_FLAG_SUPERPAGE}u, }};",
         f"enum {{ XS_GENERATED_MMU_FLAG_FAULT = {MMU_RULE_FLAG_FAULT}u, }};",
         f"enum {{ XS_GENERATED_MMU_FLAG_STAGE2 = {MMU_RULE_FLAG_STAGE2}u, }};",
+        f"enum {{ XS_GENERATED_MMU_FLAG_RAW_PTE = {MMU_RULE_FLAG_RAW_PTE}u, }};",
+        f"enum {{ XS_GENERATED_MMU_FLAG_SWITCH_CONTEXT = {MMU_RULE_FLAG_SWITCH_CONTEXT}u, }};",
+        f"enum {{ XS_GENERATED_MMU_CSR_MXR = {MMU_RULE_CSR_MXR}u, }};",
+        f"enum {{ XS_GENERATED_MMU_CSR_SUM = {MMU_RULE_CSR_SUM}u, }};",
+        f"enum {{ XS_GENERATED_MMU_ATTR_PBMT_NC = {MMU_RULE_ATTR_PBMT_NC}u, }};",
+        f"enum {{ XS_GENERATED_MMU_ATTR_PMA = {MMU_RULE_ATTR_PMA}u, }};",
+        f"enum {{ XS_GENERATED_MMU_ATTR_MMIO = {MMU_RULE_ATTR_MMIO}u, }};",
+        f"enum {{ XS_GENERATED_MMU_RETRY_NONE = {MMU_RULE_RETRY_NONE}u, }};",
+        f"enum {{ XS_GENERATED_MMU_RETRY_REPAIR_THEN_REEXECUTE = {MMU_RULE_RETRY_REPAIR_THEN_REEXECUTE}u, }};",
+        "#define XS_GENERATED_MMU_PTE_PBMT_NC ((uintptr_t)1ull << 61)",
+        "#define XS_GENERATED_MMU_PTE_PBMT_IO ((uintptr_t)2ull << 61)",
         "",
         "extern const xs_generated_mmu_rule_t *const xs_generated_mmu_rules[];",
         "extern const size_t xs_generated_mmu_rule_count;",
@@ -498,6 +708,7 @@ def emit_mmu_rule_artifacts(
         "",
         '#include "xsam/mmu.h"',
         '#include "xsam/mmu_fault.h"',
+        '#include "xsam_xs_platform.h"',
         "",
     ]
 

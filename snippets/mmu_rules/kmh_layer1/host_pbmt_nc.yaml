@@ -1,0 +1,29 @@
+id: host_pbmt_nc
+requestor: load
+mode: host_single_stage
+setup:
+  attributes:
+    pbmt: nc
+  mappings:
+    - name: pbmt_nc_page
+      va: 0x900060000
+      pa: 0x81036000
+      perms: [r, a, d]
+      raw_pte:
+        bits: [v, r, a, d]
+        pbmt: nc
+trigger:
+  op: load
+  addr: pbmt_nc_page
+expect:
+  result: page_fault
+observe:
+  - fault_cause_match
+  - attribute_policy_match
+coverage_tags:
+  - requestor.load
+  - mode.host_single_stage
+  - exception.page_fault
+  - pte.raw
+  - attr.nc
+  - attr.pbmt_nc

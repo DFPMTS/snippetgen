@@ -103,6 +103,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         run_batch_id=args.batch_id,
         timeout_s=args.timeout_sec,
         jobs=args.jobs,
+        runner_profile=args.runner_profile,
     )
     print(ledger_path)
     return _run_exit_code(ledger_path)
@@ -156,6 +157,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--batch-id")
     run_parser.add_argument("--jobs", type=int, default=1)
     run_parser.add_argument("--timeout-sec", type=int)
+    run_parser.add_argument("--runner-profile")
     run_parser.set_defaults(handler=cmd_run)
 
     generate_parser = subparsers.add_parser("generate-suites")

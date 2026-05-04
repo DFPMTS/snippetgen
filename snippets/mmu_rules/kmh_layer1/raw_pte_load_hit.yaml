@@ -1,0 +1,26 @@
+id: raw_pte_load_hit
+requestor: load
+mode: host_single_stage
+setup:
+  mappings:
+    - name: raw_leaf_page
+      va: 0x900020000
+      pa: 0x81032000
+      perms: [r, a, d]
+      raw_pte:
+        bits: [v, r, a, d]
+trigger:
+  op: load
+  addr: raw_leaf_page
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.load
+  - mode.host_single_stage
+  - pte.raw
+  - pte.v
+  - pte.r
+  - pte.a
+  - pte.d

@@ -1,0 +1,21 @@
+id: hsv_store_hit
+requestor: hsv
+mode: onlyStage2
+setup:
+  mappings:
+    - name: hsv_page
+      stage: stage2
+      va: 0x80408000
+      pa: 0x80409000
+      perms: [r, w, a, d]
+trigger:
+  op: guest_store
+  addr: hsv_page
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.hsv
+  - mode.onlyStage2
+  - guest.vs_only

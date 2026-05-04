@@ -413,6 +413,9 @@ class RunPipelineTest(unittest.TestCase):
 
         self.assertEqual("ran", result.status)
         self.assertIn("ran", result.labels)
+        self.assertIsNone(result.runner_profile)
+        self.assertEqual(str(emu_path), result.runner_path)
+        self.assertEqual(str(diff_path), result.diff_path)
         command = captured["command"]
         self.assertEqual(str(emu_path), command[0])
         self.assertIn("--diff", command)

@@ -1,0 +1,24 @@
+id: host_sum_user_load
+requestor: load
+mode: host_single_stage
+preconditions:
+  csr:
+    sum: true
+setup:
+  mappings:
+    - name: user_page
+      va: 0x900040000
+      pa: 0x81034000
+      perms: [r, u, a, d]
+trigger:
+  op: load
+  addr: user_page
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.load
+  - mode.host_single_stage
+  - pte.u
+  - priv.sum

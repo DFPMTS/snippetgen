@@ -1,0 +1,25 @@
+id: host_mxr_exec_load
+requestor: load
+mode: host_single_stage
+preconditions:
+  csr:
+    mxr: true
+setup:
+  mappings:
+    - name: exec_only_page
+      va: 0x900030000
+      pa: 0x81033000
+      perms: [x, a]
+trigger:
+  op: load
+  addr: exec_only_page
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.load
+  - mode.host_single_stage
+  - pte.x
+  - pte.a
+  - priv.mxr

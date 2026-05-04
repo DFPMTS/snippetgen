@@ -1,0 +1,36 @@
+suite: kmh_mmu_layer1_full
+target: xiangshan-verilator
+seed: 241027
+compose:
+  mode: sequence
+  snippets:
+    - init_basic_env
+    - mmu_rule_runner_main
+    - finish_check
+  mmu:
+    rule_dir: ../snippets/mmu_rules/kmh_layer1
+    rule_ids:
+      - bare_identity
+      - sv39_alias
+      - superpage
+      - sfence_remap
+      - hybrid_load_identity
+      - only_stage1_load_hit
+      - raw_pte_load_hit
+      - host_mxr_exec_load
+      - host_sum_user_load
+      - host_pmp_deny
+      - host_pbmt_nc
+      - host_pma_mmio_attribute
+      - satp_asid_switch
+      - load_page_fault
+      - store_page_fault
+      - load_access_fault
+      - store_access_fault
+      - fault_repair_retry
+      - only_stage2_hlv_hit
+      - all_stage_hlv_hit
+      - hlvx_exec_hit
+      - hsv_store_hit
+      - two_stage_fault
+      - vsatp_hgatp_context_switch

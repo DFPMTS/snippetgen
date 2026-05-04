@@ -1,0 +1,21 @@
+id: hlvx_exec_hit
+requestor: hlvx
+mode: onlyStage2
+setup:
+  mappings:
+    - name: exec_page
+      stage: stage2
+      va: 0x80406000
+      pa: 0x80407000
+      perms: [x, a]
+trigger:
+  op: hlvx_load
+  addr: exec_page
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.hlvx
+  - mode.onlyStage2
+  - guest.vs_only

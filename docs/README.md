@@ -10,6 +10,8 @@ This directory is split into four kinds of material:
   - build and run workloads on XiangShan `emu`
 - [`mmu-spec-in-case-out.md`](mmu-spec-in-case-out.md)
   - MMU rule schema, generated artifacts, pilot suite, and coverage ledger guide
+- [`2026-04-27-kmh-mmu-layer1-run-notes.md`](2026-04-27-kmh-mmu-layer1-run-notes.md)
+  - Kunminghu v2/v3 layer-1 MMU rule corpus, profile, build, and run evidence notes
 - [`release-notes-2026-04-11.md`](release-notes-2026-04-11.md)
   - current release snapshot
 
@@ -17,6 +19,8 @@ This directory is split into four kinds of material:
 
 - [`mmu-spec-in-case-out.md`](mmu-spec-in-case-out.md)
   - start here for `suites/mmu_pilot_rules_poc.yaml`, `snippets/mmu_rules/pilot/`, `generated_mmu_rule.*`, and `mmu_coverage_ledger.json`
+- [`2026-04-27-kmh-mmu-layer1-run-notes.md`](2026-04-27-kmh-mmu-layer1-run-notes.md)
+  - current Kunminghu layer-1 MMU verification notes and environment blockers
 - [`archive/2026-04-24-mmu-interface-inventory.md`](archive/2026-04-24-mmu-interface-inventory.md)
   - historical inventory mapping legacy `mmutest` responsibilities to the new `xsam_mmu_*` surface
 - [`archive/2026-04-24-mmu-spec-in-case-out-interface-design.md`](archive/2026-04-24-mmu-spec-in-case-out-interface-design.md)

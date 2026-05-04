@@ -112,6 +112,11 @@ def _entry_payload(entry: RunEntry) -> dict:
         "notes": entry.notes,
         "returncode": entry.returncode,
         "finish_code": entry.finish_code,
+        "runner_profile": entry.runner_profile,
+        "runner_revision": entry.runner_revision,
+        "diff_revision": entry.diff_revision,
+        "runner_path": entry.runner_path,
+        "diff_path": entry.diff_path,
         "mmu_coverage_ledger": (
             str(entry.mmu_coverage_ledger_path)
             if entry.mmu_coverage_ledger_path is not None
@@ -190,6 +195,11 @@ def _completed_entry(
         returncode=target_result.returncode,
         finish_code=target_result.finish_code,
         mmu_coverage_ledger_path=mmu_coverage_ledger_path,
+        runner_profile=target_result.runner_profile or prepared.run_artifacts.runner_profile,
+        runner_revision=target_result.runner_revision,
+        diff_revision=target_result.diff_revision,
+        runner_path=target_result.runner_path,
+        diff_path=target_result.diff_path,
     )
 
 
@@ -204,6 +214,7 @@ def _prepare_seed_run(
     stderr_log_path: Path,
     run_meta_path: Path,
     wave_path: Path,
+    runner_profile: str | None,
 ) -> _PreparedSeedRun:
     emit_harness(plan, artifact.generated_suite_path)
     build_artifacts(repo_root, plan, artifact)
@@ -217,6 +228,7 @@ def _prepare_seed_run(
         stderr_log_path=stderr_log_path,
         run_meta_path=run_meta_path,
         wave_path=wave_path,
+        runner_profile=runner_profile,
     )
     return _PreparedSeedRun(
         seed=seed,
@@ -294,6 +306,7 @@ def run_suite_batch(
     run_batch_id: str | None = None,
     timeout_s: int | None = None,
     jobs: int = 1,
+    runner_profile: str | None = None,
 ) -> Path:
     if jobs < 1:
         raise ValueError(f"jobs must be positive: {jobs}")
@@ -327,6 +340,7 @@ def run_suite_batch(
                 stderr_log_path=stderr_log_path,
                 run_meta_path=run_meta_path,
                 wave_path=wave_path,
+                runner_profile=runner_profile,
             )
         except Exception as exc:
             prepared = _PreparedSeedRun(
@@ -343,6 +357,7 @@ def run_suite_batch(
                     stderr_log_path=stderr_log_path,
                     run_meta_path=run_meta_path,
                     wave_path=wave_path,
+                    runner_profile=runner_profile,
                 ),
                 stdout_log_path=stdout_log_path,
                 stderr_log_path=stderr_log_path,

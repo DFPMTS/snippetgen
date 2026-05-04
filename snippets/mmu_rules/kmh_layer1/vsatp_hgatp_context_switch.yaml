@@ -1,0 +1,52 @@
+id: vsatp_hgatp_context_switch
+requestor: hlv
+mode: allStage
+preconditions:
+  csr:
+    vsatp_asid: 6
+    hgatp_vmid: 7
+setup:
+  mappings:
+    - name: vs_context_stage1
+      va: 0xc00009000
+      pa: 0x80409000
+      perms: [r, a, d]
+    - name: g_context_stage2
+      stage: stage2
+      va: 0x80409000
+      pa: 0x8040a000
+      perms: [r, a, d]
+    - name: vs_context_stage1_switched
+      context: switch
+      va: 0xc00009000
+      pa: 0x8040b000
+      perms: [r, a, d]
+    - name: g_context_stage2_switched
+      context: switch
+      stage: stage2
+      va: 0x8040b000
+      pa: 0x8040c000
+      perms: [r, a, d]
+actions:
+  before_trigger:
+    - switch_vsatp_context
+    - switch_hgatp_context
+    - hfence_vvma
+    - hfence_gvma
+trigger:
+  op: guest_load
+  addr: vs_context_stage1
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.hlv
+  - mode.allStage
+  - guest.two_stage
+  - ctrl.vsatp
+  - ctrl.hgatp
+  - ctrl.asid
+  - ctrl.vmid
+  - ctrl.hfence_vvma
+  - ctrl.hfence_gvma

@@ -1,0 +1,18 @@
+suite: kmh_mmu_layer1_case_host_perm_prefix
+target: xiangshan-verilator
+seed: 241027
+compose:
+  mode: sequence
+  snippets:
+    - init_basic_env
+    - mmu_rule_runner_main
+    - finish_check
+  mmu:
+    rule_dir: ../snippets/mmu_rules/kmh_layer1
+    rule_ids:
+      - raw_pte_load_hit
+      - host_mxr_exec_load
+      - host_sum_user_load
+      - load_page_fault
+      - store_page_fault
+      - load_access_fault

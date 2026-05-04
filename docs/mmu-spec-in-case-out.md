@@ -14,8 +14,18 @@ This is a first-wave functional interface. It is meant for spec-shaped MMU cases
   - smallest smoke suite using one `bare_identity` rule.
 - `suites/mmu_pilot_rules_poc.yaml`
   - pilot bundle with bare identity, Sv39 alias, superpage, `sfence` remap, load page fault, and two-stage guest-page-fault rules.
+- `suites/kmh_mmu_layer1_smoke.yaml`
+  - smallest Kunminghu layer-1 MMU rule bundle.
+- `suites/kmh_mmu_layer1_v2_smoke.yaml`
+  - Kunminghu v2 smoke entry; v2 may grow vector-triggered MMU cases.
+- `suites/kmh_mmu_layer1_v3_smoke.yaml`
+  - Kunminghu v3 smoke entry; first-wave v3 suites intentionally exclude vector instruction cases.
+- `suites/kmh_mmu_layer1_host_perm.yaml`, `suites/kmh_mmu_layer1_attr_ctrl.yaml`, `suites/kmh_mmu_layer1_hyp.yaml`, `suites/kmh_mmu_layer1_faults.yaml`, and `suites/kmh_mmu_layer1_full.yaml`
+  - grouped Kunminghu layer-1 suites for permissions, attributes/control, H-extension translation, faults, and the full generated corpus.
 - `snippets/mmu_rules/pilot/*.yaml`
   - rule database consumed by the pilot suites.
+- `snippets/mmu_rules/kmh_layer1/*.yaml`
+  - first-wave Kunminghu v2/v3 rule database with one YAML file per rule.
 - `snippets/programs/mmu_rule_runner_main.c`
   - generic AM program runner that consumes generated MMU rule data.
 - `generator/xsgen/mmu_rule_loader.py`
@@ -135,6 +145,67 @@ The expected successful result is:
 - the matching `batch_meta.json` entry has `status: "ran"`, `finish_code: 0`, and `labels` including `good_trap`.
 - `stdout.log` contains `HIT GOOD TRAP`.
 - `mmu_coverage_ledger.json` marks the selected pilot rules as `ran`.
+
+## Kunminghu Layer-1 Flow
+
+Build the full generated Kunminghu layer-1 corpus:
+
+```bash
+make kmh-mmu-layer1-build
+```
+
+The equivalent direct command is:
+
+```bash
+python3 generator/cli.py build suites/kmh_mmu_layer1_full.yaml
+```
+
+Run the smoke suites through explicit cached runner profiles:
+
+```bash
+make kmh-mmu-layer1-smoke-v2
+make kmh-mmu-layer1-smoke-v3
+```
+
+The direct commands are:
+
+```bash
+python3 generator/cli.py run suites/kmh_mmu_layer1_v2_smoke.yaml \
+  --seed 241027 \
+  --timeout-sec 600 \
+  --runner-profile kmh-v2/difftest
+
+python3 generator/cli.py run suites/kmh_mmu_layer1_v3_smoke.yaml \
+  --seed 241027 \
+  --timeout-sec 600 \
+  --runner-profile kmh-v3/difftest
+```
+
+Runner profiles are resolved from `../artifacts/kmh-runners/manifest.json`
+relative to the `snippetgen` checkout unless `SNIPPETGEN_KMH_RUNNER_MANIFEST`
+points at another manifest. An example manifest is checked in at
+`docs/evidence/kmh-mmu-layer1/runner-manifest.example.json`.
+When `--runner-profile` is set, the target adapter fails with
+`labels: ["error", "runner_profile"]` if the manifest or named binary is
+missing; it does not silently fall back to whatever `emu` is on the host.
+
+Successful run evidence must include the generated `batch_meta.json`, each
+seed's `run_meta.json`, `stdout.log`, `stderr.log`, runner profile name,
+XiangShan revision, NEMU revision, `emu` path, and NEMU reference path. The
+current run notes live in `docs/2026-04-27-kmh-mmu-layer1-run-notes.md`.
+
+## Pilot And KMH Rule Sets
+
+`snippets/mmu_rules/pilot/` remains the small interface smoke corpus for the
+generic MMU rule runner. `snippets/mmu_rules/kmh_layer1/` is the formal
+Kunminghu layer-1 corpus used for the v2/v3 regression matrix.
+
+Do not add new Kunminghu coverage only to the pilot directory. New first-layer
+rules should land in `kmh_layer1` first, then optionally be mirrored into
+`pilot` only when the rule is useful as a tiny interface smoke case. If a pilot
+rule and a KMH rule cover the same scenario, prefer keeping the KMH rule as the
+source of coverage truth and treat the pilot copy as compatibility smoke. This
+prevents the two directories from becoming independent rule universes.
 
 ## Adding A Rule
 

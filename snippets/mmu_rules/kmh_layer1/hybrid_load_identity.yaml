@@ -1,0 +1,21 @@
+id: hybrid_load_identity
+requestor: hybrid_load
+mode: host_single_stage
+setup:
+  mappings:
+    - name: hybrid_identity_page
+      kind: identity
+      va: 0x81026000
+      pa: 0x81026000
+      perms: [r, a]
+trigger:
+  op: load
+  addr: hybrid_identity_page
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.hybrid_load
+  - mode.host_single_stage
+  - page.identity

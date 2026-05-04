@@ -1,0 +1,21 @@
+id: store_access_fault
+requestor: store
+mode: host_single_stage
+setup:
+  mappings:
+    - name: store_access_page
+      va: 0xb00003000
+      pa: 0x81025000
+      perms: [r, w, a, d]
+      fault: true
+trigger:
+  op: store
+  addr: store_access_page
+expect:
+  result: access_fault
+observe:
+  - fault_cause_match
+coverage_tags:
+  - requestor.store
+  - mode.host_single_stage
+  - exception.access_fault

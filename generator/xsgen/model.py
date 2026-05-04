@@ -68,6 +68,7 @@ class RunSeedArtifacts:
     stderr_log_path: Path
     run_meta_path: Path
     wave_path: Path | None = None
+    runner_profile: str | None = None
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,11 @@ class TargetRunResult:
     notes: str
     returncode: int | None = None
     finish_code: int | None = None
+    runner_profile: str | None = None
+    runner_revision: str | None = None
+    diff_revision: str | None = None
+    runner_path: str | None = None
+    diff_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -99,6 +105,11 @@ class RunEntry:
     returncode: int | None = None
     finish_code: int | None = None
     mmu_coverage_ledger_path: Path | None = None
+    runner_profile: str | None = None
+    runner_revision: str | None = None
+    diff_revision: str | None = None
+    runner_path: str | None = None
+    diff_path: str | None = None
 
 
 @dataclass(frozen=True)

@@ -1,0 +1,21 @@
+id: only_stage2_hlv_hit
+requestor: hlv
+mode: onlyStage2
+setup:
+  mappings:
+    - name: stage2_page
+      stage: stage2
+      va: 0x80402000
+      pa: 0x80403000
+      perms: [r, a]
+trigger:
+  op: guest_load
+  addr: stage2_page
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.hlv
+  - mode.onlyStage2
+  - guest.vs_only

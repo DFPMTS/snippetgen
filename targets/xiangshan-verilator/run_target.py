@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 import os
 import re
 import shutil
 import subprocess
 
+from generator.xsgen.runner_profiles import DEFAULT_RUNNER_MANIFEST_PATH, resolve_runner_profile
 from generator.xsgen.model import TargetRunResult
 
 
@@ -72,14 +74,71 @@ def _diff_path(env: dict[str, str]) -> Path | None:
     return None
 
 
-def _error_result(*, artifacts, notes: str, labels: tuple[str, ...] = ("error",)) -> TargetRunResult:
+def _error_result(
+    *,
+    artifacts,
+    notes: str,
+    labels: tuple[str, ...] = ("error",),
+    runner_metadata: dict[str, str | None] | None = None,
+) -> TargetRunResult:
     artifacts.stderr_log_path.write_text(f"{notes}\n")
     artifacts.stdout_log_path.write_text("")
+    metadata = runner_metadata or {}
     return TargetRunResult(
         status="error",
         labels=labels,
         notes=notes,
         returncode=None,
+        runner_profile=metadata.get("runner_profile"),
+        runner_revision=metadata.get("runner_revision"),
+        diff_revision=metadata.get("diff_revision"),
+        runner_path=metadata.get("runner_path"),
+        diff_path=metadata.get("diff_path"),
+    )
+
+
+def _runner_profile_name(artifacts) -> str | None:
+    return artifacts.runner_profile or os.environ.get("SNIPPETGEN_RUNNER_PROFILE")
+
+
+def _runner_manifest_path() -> Path:
+    override = os.environ.get("SNIPPETGEN_KMH_RUNNER_MANIFEST")
+    if override:
+        return Path(override)
+    return DEFAULT_RUNNER_MANIFEST_PATH
+
+
+def _metadata_for_profile(profile) -> dict[str, str | None]:
+    return {
+        "runner_profile": profile.name,
+        "runner_revision": profile.xiangshan_revision,
+        "diff_revision": profile.nemu_revision,
+        "runner_path": str(profile.emu_path),
+        "diff_path": str(profile.diff_path),
+    }
+
+
+def _metadata_for_paths(emu_path: Path | None, diff_path: Path | None) -> dict[str, str | None]:
+    return {
+        "runner_profile": None,
+        "runner_revision": None,
+        "diff_revision": None,
+        "runner_path": str(emu_path) if emu_path is not None else None,
+        "diff_path": str(diff_path) if diff_path is not None else None,
+    }
+
+
+def _attach_runner_metadata(
+    result: TargetRunResult,
+    runner_metadata: dict[str, str | None],
+) -> TargetRunResult:
+    return replace(
+        result,
+        runner_profile=runner_metadata.get("runner_profile"),
+        runner_revision=runner_metadata.get("runner_revision"),
+        diff_revision=runner_metadata.get("diff_revision"),
+        runner_path=runner_metadata.get("runner_path"),
+        diff_path=runner_metadata.get("diff_path"),
     )
 
 
@@ -157,17 +216,46 @@ def _classify_result(*, stdout_text: str, stderr_text: str, returncode: int) -> 
 
 def run_target(*, artifacts, timeout_s: int | None) -> TargetRunResult:
     env = _xs_env()
-    emu_path = _emu_path(env)
-    diff_path = _diff_path(env)
+    profile_name = _runner_profile_name(artifacts)
+    runner_metadata: dict[str, str | None] = {
+        "runner_profile": profile_name,
+        "runner_revision": None,
+        "diff_revision": None,
+        "runner_path": None,
+        "diff_path": None,
+    }
+
+    if profile_name is not None:
+        try:
+            profile = resolve_runner_profile(profile_name, _runner_manifest_path())
+        except ValueError as exc:
+            return _error_result(
+                artifacts=artifacts,
+                notes=str(exc),
+                labels=("error", "runner_profile"),
+                runner_metadata=runner_metadata,
+            )
+        emu_path = profile.emu_path
+        diff_path = profile.diff_path
+        runner_metadata = _metadata_for_profile(profile)
+    else:
+        emu_path = _emu_path(env)
+        diff_path = _diff_path(env)
+        runner_metadata = _metadata_for_paths(emu_path, diff_path)
 
     if artifacts.build_artifact.bin_path is None or not artifacts.build_artifact.bin_path.is_file():
-        return _error_result(artifacts=artifacts, notes="missing bin artifact")
+        return _error_result(
+            artifacts=artifacts,
+            notes="missing bin artifact",
+            runner_metadata=runner_metadata,
+        )
 
     if emu_path is None:
         return _error_result(
             artifacts=artifacts,
             notes="runner missing: emu",
             labels=("error", "runner_missing"),
+            runner_metadata=runner_metadata,
         )
 
     if not emu_path.is_file():
@@ -175,6 +263,7 @@ def run_target(*, artifacts, timeout_s: int | None) -> TargetRunResult:
             artifacts=artifacts,
             notes=f"runner missing: {emu_path}",
             labels=("error", "runner_missing"),
+            runner_metadata=runner_metadata,
         )
 
     if diff_path is None:
@@ -182,6 +271,7 @@ def run_target(*, artifacts, timeout_s: int | None) -> TargetRunResult:
             artifacts=artifacts,
             notes="runner missing: riscv64-nemu-interpreter-so",
             labels=("error", "runner_missing"),
+            runner_metadata=runner_metadata,
         )
 
     if not diff_path.is_file():
@@ -189,6 +279,7 @@ def run_target(*, artifacts, timeout_s: int | None) -> TargetRunResult:
             artifacts=artifacts,
             notes=f"runner missing: {diff_path}",
             labels=("error", "runner_missing"),
+            runner_metadata=runner_metadata,
         )
 
     timeout_value = timeout_s if timeout_s is not None else DEFAULT_TIMEOUT_SEC
@@ -229,15 +320,21 @@ def run_target(*, artifacts, timeout_s: int | None) -> TargetRunResult:
         except subprocess.TimeoutExpired:
             with artifacts.stderr_log_path.open("a") as stderr_append:
                 stderr_append.write(f"timeout after {timeout_value}s\n")
-            return TargetRunResult(
-                status="timeout",
-                labels=("built", "timeout"),
-                notes=f"timeout after {timeout_value}s",
-                returncode=None,
+            return _attach_runner_metadata(
+                TargetRunResult(
+                    status="timeout",
+                    labels=("built", "timeout"),
+                    notes=f"timeout after {timeout_value}s",
+                    returncode=None,
+                ),
+                runner_metadata,
             )
 
-    return _classify_result(
-        stdout_text=artifacts.stdout_log_path.read_text(),
-        stderr_text=artifacts.stderr_log_path.read_text(),
-        returncode=result.returncode,
+    return _attach_runner_metadata(
+        _classify_result(
+            stdout_text=artifacts.stdout_log_path.read_text(),
+            stderr_text=artifacts.stderr_log_path.read_text(),
+            returncode=result.returncode,
+        ),
+        runner_metadata,
     )
