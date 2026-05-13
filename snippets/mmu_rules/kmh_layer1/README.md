@@ -8,7 +8,9 @@ fence/control effects that the current generic runner can check.
 Version policy:
 
 - v3 excludes vector rules in the first wave.
-- v2 may include vector rules in later suites.
+- v2 vector memory MMU coverage lives in the dedicated
+  `suites/kmh_mmu_layer1_v2_vector_smoke.yaml` AM program suite. It is not part
+  of this YAML rule corpus yet.
 
 Future coverage boundaries:
 

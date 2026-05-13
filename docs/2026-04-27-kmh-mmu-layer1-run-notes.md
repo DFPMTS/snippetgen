@@ -1060,3 +1060,93 @@ Results:
 - Focused MMU inventory/schema/emitter suite: `Ran 41 tests`, `OK`.
 - Coverage summary and runner profile suite: `Ran 11 tests`, `OK`.
 - Full KMH layer-1 build: completed.
+
+## 2026-05-13 v2 vector MMU smoke
+
+This round added a dedicated v2-only vector memory MMU suite:
+`suites/kmh_mmu_layer1_v2_vector_smoke.yaml`. It is an `am_program` suite, not a
+YAML MMU rule corpus extension. The v3 smoke/full suites remain vector-free.
+
+The suite emits real vector memory instructions with local `.word` encodings:
+
+- `0x0c0572d7`: `vsetvli` for e8/m1 setup.
+- `0x02050407`: unit-stride vector load into `v8`.
+- `0x02058427`: unit-stride vector store from `v8`.
+
+It covers vector state enable, Bare vector load/store hit, Sv39 host
+single-stage vector load/store hit, a valid cross-4K vector load/store, vector
+load/store page fault, and vector load/store permission fault. The main smoke
+does not insert a pre-vector `fence rw,rw` between `vsetvli` and the first
+`vle8.v`; that boundary is intentionally left uncovered by a software
+workaround so the suite can expose the current v2 `LoadQueueReplay.sv`
+assertion.
+
+Build and inventory validation:
+
+```bash
+python3 -m unittest \
+  tests.test_build_pipeline.BuildPipelineTest.test_kmh_v2_vector_mmu_suite_builds_real_vector_memory_opcodes \
+  tests.test_kmh_mmu_layer1_inventory.KMHMMULayer1InventoryTest.test_kmh_layer1_suites_resolve_and_keep_v3_vector_free \
+  -v
+```
+
+Result: `Ran 2 tests`, `OK`. The build manifest kept compile flags at
+`-march=rv64gc`; the disassembly contained `0c0572d7`, `02050407`, and
+`02058427`.
+
+Target command:
+
+```bash
+SNIPPETGEN_RUN_MAX_CYCLES=300000 \
+SNIPPETGEN_RUN_MAX_INSTR=300000 \
+python3 generator/cli.py run suites/kmh_mmu_layer1_v2_vector_smoke.yaml \
+  --seed 241027 \
+  --timeout-sec 1800 \
+  --runner-profile kmh-v2/difftest \
+  --batch-id kmh_v2_vector_mmu_no_prefence_20260513
+```
+
+Current no-fence target evidence:
+
+| Profile | Suite | Batch | Result | Notes |
+|---------|-------|-------|--------|-------|
+| `kmh-v2/difftest` | `kmh_mmu_layer1_v2_vector_smoke` | `build/kmh_mmu_layer1_v2_vector_smoke/runs/kmh_v2_vector_mmu_no_prefence_20260513/batch_meta.json` | `abort`, labels `built`, `ran`, `abort`, `rtl_assert` | `LoadQueueReplay.sv:22867`, replay entry 25: `vector load, should not have replay entry ... when commit or flush`; abort PC `0x800016ca`, `instrCnt = 7932`, `cycleCnt = 11594`, seed `241027` |
+
+Historical fenced control evidence:
+
+| Profile | Suite | Batch | Result | Notes |
+|---------|-------|-------|--------|-------|
+| `kmh-v2/difftest` | `kmh_mmu_layer1_v2_vector_smoke` | `build/kmh_mmu_layer1_v2_vector_smoke/runs/kmh_v2_vector_mmu_20260513_finalize/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 9227`, `cycleCnt = 13956` | runner revision `f3cc750109cc2a0ff6c12a920221f1a5a324bc75`, NEMU revision `43f6b0ce4aae3ee1171430bd9a0a55cbd833efc3`, seed `241027` |
+
+That passing batch used the now-removed pre-vector fence and is retained only
+as a control point. It is not counted as evidence that the no-fence v2 vector
+MMU path is clean.
+
+Bug-hunting notes:
+
+- `kmh_v2_vector_mmu_20260513_r0` first failed because the new program had not
+  initialized PMP before using S-mode translated accesses. That was a test
+  setup bug; the program now calls `xsam_xs_pmp_init()`.
+- `kmh_v2_vector_mmu_20260513_r1_pmp`,
+  `kmh_v2_vector_mmu_20260513_r2_fenced_vmem`, and
+  `kmh_v2_vector_mmu_20260513_r3_host_window` all hit a v2 RTL assertion in
+  or immediately after the first Bare vector load/store roundtrip:
+
+  | Batch | Assertion | Abort PC | Notes |
+  |-------|-----------|----------|-------|
+  | `kmh_v2_vector_mmu_20260513_r1_pmp` | `LoadQueueReplay.sv:22855`, replay entry 23: `vector load, should not have replay entry ... when commit or flush` | `0x80001704` | PMP setup was fixed, and the first Bare vector roundtrip still exposed the no-fence replay assertion. |
+  | `kmh_v2_vector_mmu_20260513_r2_fenced_vmem` | `LoadQueueReplay.sv:22867`, replay entry 25: `vector load, should not have replay entry ... when commit or flush` | `0x8000171c` | Intermediate fence placement after vector memory operations did not fix the failing boundary. |
+  | `kmh_v2_vector_mmu_20260513_r3_host_window` | `LoadQueueReplay.sv:22867`, replay entry 25: `vector load, should not have replay entry ... when commit or flush` | `0x800016ca` | Host-access-window changes alone still failed. |
+
+  A later experiment inserted a pre-vector `fence rw,rw` and reached good trap,
+  proving the fence can hide the issue. The main suite no longer keeps that
+  workaround, so current no-fence runs are expected to expose the v2 RTL bug
+  until `LoadQueueReplay.sv` is fixed.
+
+Deferred vector backlog:
+
+- Indexed, strided, segment, masked, and fault-only-first vector memory forms.
+- Precise `vstart` recovery and partial vector fault restart.
+- Misaligned cross-page vector fault cases.
+- PTW/L2TLB competition, merged miss behavior, replay timing, and other
+  monitor/scoreboard-backed microarchitectural coverage.

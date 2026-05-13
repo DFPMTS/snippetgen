@@ -102,6 +102,25 @@ class KMHMMULayer1InventoryTest(unittest.TestCase):
         self.assertLessEqual({"mode.onlyStage1", "mode.onlyStage2", "mode.allStage"}, set(plans["full"].mmu_coverage_tags))
         self.assertIn("retry.repair_then_reexecute", plans["full"].mmu_coverage_tags)
 
+        vector_plan = build_compose_plan(
+            load_suite(ROOT / "suites" / "kmh_mmu_layer1_v2_vector_smoke.yaml"),
+            snippet_db,
+        )
+        self.assertEqual(
+            ("init_basic_env", "kmh_v2_vector_mmu_main", "finish_check"),
+            vector_plan.snippet_ids,
+        )
+        self.assertEqual((), vector_plan.mmu_rule_ids)
+        self.assertEqual((), vector_plan.mmu_coverage_tags)
+
+        for suite_name in ("v3", "full"):
+            with self.subTest(vector_free_suite=suite_name):
+                self.assertNotIn("kmh_v2_vector_mmu_main", plans[suite_name].snippet_ids)
+
+        for suite_name in ("v3", "full", "v2"):
+            with self.subTest(replay_debug_free_suite=suite_name):
+                self.assertFalse(any("vector_replay" in snippet_id for snippet_id in plans[suite_name].snippet_ids))
+
     def test_permission_fault_rules_are_observable_and_suite_selected(self) -> None:
         import yaml
         from generator.xsgen.snippet_db import load_snippet_db

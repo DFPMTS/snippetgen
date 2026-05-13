@@ -87,6 +87,7 @@ class BuildPipelineTest(unittest.TestCase):
         self.mmu_pilot_build_dir = ROOT / "build" / "mmu_pilot_rules_poc"
         self.mmu_bare_identity_build_dir = ROOT / "build" / "mmu_bare_identity_poc"
         self.mmu_missing_rule_build_dir = ROOT / "build" / "mmu_missing_rule"
+        self.kmh_v2_vector_mmu_build_dir = ROOT / "build" / "kmh_mmu_layer1_v2_vector_smoke"
         if self.build_dir.exists():
             shutil.rmtree(self.build_dir)
         if self.deferred_check_markers_build_dir.exists():
@@ -161,6 +162,8 @@ class BuildPipelineTest(unittest.TestCase):
             shutil.rmtree(self.mmu_bare_identity_build_dir)
         if self.mmu_missing_rule_build_dir.exists():
             shutil.rmtree(self.mmu_missing_rule_build_dir)
+        if self.kmh_v2_vector_mmu_build_dir.exists():
+            shutil.rmtree(self.kmh_v2_vector_mmu_build_dir)
 
     def test_emitter_generates_harness_in_suite_order(self) -> None:
         emitter = importlib.import_module("generator.xsgen.emitter")
@@ -1131,6 +1134,44 @@ class BuildPipelineTest(unittest.TestCase):
         self.assertEqual(manifest["mmu"]["coverage_tags"], manifest["mmu"]["emitted_coverage_tags"])
         self.assertNotIn("guest.two_stage", manifest["mmu"]["coverage_tags"])
         self.assertNotIn("requestor.hlv", manifest["mmu"]["coverage_tags"])
+
+    def test_kmh_v2_vector_mmu_suite_builds_real_vector_memory_opcodes(self) -> None:
+        result = subprocess.run(
+            ["python3", "generator/cli.py", "build", "suites/kmh_mmu_layer1_v2_vector_smoke.yaml"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assert_or_skip_for_toolchain(result)
+
+        build_manifest = self.kmh_v2_vector_mmu_build_dir / "build_manifest.json"
+        disasm = self.kmh_v2_vector_mmu_build_dir / "disasm"
+        generated_suite = self.kmh_v2_vector_mmu_build_dir / "generated_suite.c"
+        self.assertTrue(build_manifest.is_file())
+        self.assertTrue(disasm.is_file())
+        self.assertTrue(generated_suite.is_file())
+
+        manifest = json.loads(build_manifest.read_text())
+        self.assert_manifest_matches_suite_plan(manifest, "suites/kmh_mmu_layer1_v2_vector_smoke.yaml")
+        self.assertEqual(
+            ["init_basic_env", "kmh_v2_vector_mmu_main", "finish_check"],
+            manifest["snippet_ids"],
+        )
+        self.assertIn("xsam_program_entry_kmh_v2_vector_mmu_main", generated_suite.read_text())
+
+        compile_marches = {
+            flag
+            for command in manifest["commands"]["compile"]
+            for flag in command
+            if flag.startswith("-march=")
+        }
+        self.assertEqual({"-march=rv64gc"}, compile_marches)
+
+        disasm_text = disasm.read_text()
+        self.assertIn("0c0572d7", disasm_text)
+        self.assertIn("02050407", disasm_text)
+        self.assertIn("02058427", disasm_text)
 
     def test_vsetvl_suite_harness_order_and_final_elf_contains_vsetvl(self) -> None:
         emitter = importlib.import_module("generator.xsgen.emitter")

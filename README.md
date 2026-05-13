@@ -147,6 +147,23 @@ python3 generator/cli.py mmu-coverage-summary \
   build/kmh_mmu_layer1_host_perm/runs/kmh_v3_host_perm/batch_meta.json
 ```
 
+The v2 vector MMU smoke suite is intentionally separate from the v2/v3 scalar
+baseline. It emits real unit-stride vector load/store instructions with local
+`.word` encodings and keeps the global toolchain ISA at `rv64gc`.
+
+```bash
+SNIPPETGEN_RUN_MAX_CYCLES=300000 \
+SNIPPETGEN_RUN_MAX_INSTR=300000 \
+python3 generator/cli.py run suites/kmh_mmu_layer1_v2_vector_smoke.yaml \
+  --seed 241027 \
+  --timeout-sec 1800 \
+  --runner-profile kmh-v2/difftest \
+  --batch-id kmh_v2_vector_mmu_<date>
+```
+
+Do not run this suite as v3 evidence. The v3 smoke/full MMU suites stay
+vector-free until a separate v3 vector plan exists.
+
 ## CLI Reference
 
 Run commands from the repository root with `python3 generator/cli.py <command> ...`.
@@ -292,6 +309,8 @@ build/<suite>/runs/
   - pilot MMU rule bundle covering bare identity, Sv39 alias, superpage, `sfence` remap, load page fault, and two-stage guest-page-fault paths
 - `suites/kmh_mmu_layer1_v2_smoke.yaml` and `suites/kmh_mmu_layer1_v3_smoke.yaml`
   - cached-runner smoke entries for Kunminghu v2/v3; v3 remains vector-free in this wave
+- `suites/kmh_mmu_layer1_v2_vector_smoke.yaml`
+  - v2-only vector memory MMU smoke covering vector enable, Bare hit, Sv39 host single-stage hit, cross-4K valid access, and basic vector load/store page-fault and permission-fault checks
 - `suites/kmh_mmu_layer1_host_perm.yaml`, `suites/kmh_mmu_layer1_attr_ctrl.yaml`, `suites/kmh_mmu_layer1_hyp.yaml`, and `suites/kmh_mmu_layer1_faults.yaml`
   - group baselines for first-layer MMU permission, attribute/control, H-extension, and fault coverage
 

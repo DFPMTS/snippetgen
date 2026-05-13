@@ -17,7 +17,9 @@ This is a first-wave functional interface. It is meant for spec-shaped MMU cases
 - `suites/kmh_mmu_layer1_smoke.yaml`
   - smallest Kunminghu layer-1 MMU rule bundle.
 - `suites/kmh_mmu_layer1_v2_smoke.yaml`
-  - Kunminghu v2 smoke entry; v2 may grow vector-triggered MMU cases.
+  - Kunminghu v2 scalar smoke entry.
+- `suites/kmh_mmu_layer1_v2_vector_smoke.yaml`
+  - Kunminghu v2-only vector memory MMU smoke; this is a dedicated AM program suite, not part of the YAML MMU rule corpus.
 - `suites/kmh_mmu_layer1_v3_smoke.yaml`
   - Kunminghu v3 smoke entry; first-wave v3 suites intentionally exclude vector instruction cases.
 - `suites/kmh_mmu_layer1_host_perm.yaml`, `suites/kmh_mmu_layer1_attr_ctrl.yaml`, `suites/kmh_mmu_layer1_hyp.yaml`, `suites/kmh_mmu_layer1_faults.yaml`, and `suites/kmh_mmu_layer1_full.yaml`
@@ -209,8 +211,25 @@ python3 generator/cli.py run suites/kmh_mmu_layer1_host_perm.yaml \
 
 Repeat that command shape for `kmh_mmu_layer1_attr_ctrl.yaml`,
 `kmh_mmu_layer1_hyp.yaml`, and `kmh_mmu_layer1_faults.yaml`. v3 remains
-vector-free in this first layer; v2 vector MMU coverage should use a separate
-suite when it is added.
+vector-free in this first layer; v2 vector MMU coverage uses the separate
+`suites/kmh_mmu_layer1_v2_vector_smoke.yaml` suite.
+
+Run the v2 vector MMU suite with the v2 cached runner profile only:
+
+```bash
+SNIPPETGEN_RUN_MAX_CYCLES=300000 \
+SNIPPETGEN_RUN_MAX_INSTR=300000 \
+python3 generator/cli.py run suites/kmh_mmu_layer1_v2_vector_smoke.yaml \
+  --seed 241027 \
+  --timeout-sec 1800 \
+  --runner-profile kmh-v2/difftest \
+  --batch-id kmh_v2_vector_mmu_<date>
+```
+
+This suite currently covers unit-stride `vle8.v`/`vse8.v` behavior for Bare
+hit, Sv39 host single-stage hit, a valid cross-4K load/store, vector load/store
+page faults, and vector load/store permission faults. The vector cases use
+local encoded instructions and leave the global `-march` unchanged.
 
 Summarize v2/v3 smoke coverage after both runs:
 
