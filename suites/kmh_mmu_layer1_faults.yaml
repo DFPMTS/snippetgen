@@ -12,8 +12,18 @@ compose:
     rule_ids:
       - load_page_fault
       - store_page_fault
+      - load_read_perm_fault
+      - store_write_perm_fault
+      - host_mxr_exec_load_fault
+      - host_sum_user_load_fault
+      - load_accessed_bit_fault
+      - store_dirty_bit_fault
       - load_access_fault
       - store_access_fault
       - two_stage_fault
+      - all_stage_stage1_page_fault
+      - hlvx_exec_perm_fault
+      - only_stage2_hlv_guest_fault
+      - only_stage2_hsv_guest_fault
       - fault_repair_retry
       - host_pmp_deny

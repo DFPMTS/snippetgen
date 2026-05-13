@@ -1,0 +1,23 @@
+id: host_mxr_exec_load_fault
+requestor: load
+mode: host_single_stage
+setup:
+  mappings:
+    - name: mxr_off_exec_page
+      va: 0x9000a0000
+      pa: 0x8103a000
+      perms: [x, a]
+trigger:
+  op: load
+  addr: mxr_off_exec_page
+expect:
+  result: page_fault
+observe:
+  - fault_cause_match
+coverage_tags:
+  - requestor.load
+  - mode.host_single_stage
+  - exception.page_fault
+  - pte.x
+  - pte.a
+  - priv.mxr

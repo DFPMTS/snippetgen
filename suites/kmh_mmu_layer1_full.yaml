@@ -13,24 +13,38 @@ compose:
       - bare_identity
       - sv39_alias
       - superpage
+      - superpage_load_hit
       - sfence_remap
       - hybrid_load_identity
       - only_stage1_load_hit
       - raw_pte_load_hit
       - host_mxr_exec_load
+      - host_mxr_exec_load_fault
       - host_sum_user_load
+      - host_sum_user_load_fault
       - host_pmp_deny
       - host_pbmt_nc
       - host_pma_mmio_attribute
       - satp_asid_switch
       - load_page_fault
       - store_page_fault
+      - load_read_perm_fault
+      - store_write_perm_fault
+      - load_accessed_bit_fault
+      - store_dirty_bit_fault
       - load_access_fault
       - store_access_fault
       - fault_repair_retry
       - only_stage2_hlv_hit
+      - only_stage2_hlv_guest_fault
+      - only_stage2_superpage_hlv_hit
+      - only_stage2_vmid_switch
       - all_stage_hlv_hit
+      - all_stage_stage1_page_fault
+      - all_stage_superpage_stage2_4k_hit
       - hlvx_exec_hit
+      - hlvx_exec_perm_fault
       - hsv_store_hit
+      - only_stage2_hsv_guest_fault
       - two_stage_fault
       - vsatp_hgatp_context_switch

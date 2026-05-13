@@ -502,3 +502,63 @@ class MMURuleEmitterTest(unittest.TestCase):
             "XS_GENERATED_MMU_RETRY_REPAIR_THEN_REEXECUTE",
             self.generated_rule_field(source, "fault_retry", "retry_kind"),
         )
+
+    def test_emitter_classifies_guest_stage1_page_faults_as_ordinary_page_faults(self) -> None:
+        from generator.xsgen.mmu_rule_emitter import emit_mmu_rule_artifacts
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            build_dir = Path(tmpdir)
+            rule_dir = build_dir / "rules"
+            self.write_rule(
+                rule_dir,
+                "stage1_page_fault.yaml",
+                """
+                id: stage1_page_fault
+                requestor: hlv
+                mode: allStage
+                setup:
+                  mappings:
+                    - name: stage1_fault
+                      va: 0xc00000000
+                      pa: 0x80400000
+                      perms: [r, a]
+                      fault: true
+                    - name: stage2_ok
+                      stage: stage2
+                      va: 0x80400000
+                      pa: 0x80401000
+                      perms: [r, a]
+                trigger:
+                  op: guest_load
+                  addr: stage1_fault
+                expect:
+                  result: page_fault
+                observe:
+                  - fault_cause_match
+                coverage_tags:
+                  - requestor.hlv
+                  - mode.allStage
+                  - guest.two_stage
+                  - exception.page_fault
+                """,
+            )
+
+            emit_mmu_rule_artifacts(
+                suite_name="stage1_page_fault_emit",
+                rule_dir=rule_dir,
+                rule_ids=("stage1_page_fault",),
+                header_path=build_dir / "generated_mmu_rule.h",
+                source_path=build_dir / "generated_mmu_rule.c",
+                coverage_ledger_path=build_dir / "mmu_coverage_ledger.json",
+            )
+
+            source = (build_dir / "generated_mmu_rule.c").read_text()
+
+        self.assertEqual(
+            "XSAM_MMU_FAULT_LOAD_PAGE",
+            self.generated_rule_field(source, "stage1_page_fault", "fault_mask"),
+        )
+        self.assertEqual(
+            "XSAM_MMU_CAUSE_LOAD_PAGE_FAULT",
+            self.generated_rule_field(source, "stage1_page_fault", "expected_cause"),
+        )

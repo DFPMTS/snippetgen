@@ -1,0 +1,28 @@
+id: all_stage_superpage_stage2_4k_hit
+requestor: hlv
+mode: allStage
+setup:
+  mappings:
+    - name: guest_stage1_super_leaf
+      kind: superpage
+      va: 0xc02000000
+      pa: 0x80800000
+      perms: [r, a]
+      page_count: 512
+    - name: guest_stage2_4k_leaf
+      stage: stage2
+      va: 0x80800000
+      pa: 0x80801000
+      perms: [r, a]
+trigger:
+  op: guest_load
+  addr: guest_stage1_super_leaf
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.hlv
+  - mode.allStage
+  - guest.two_stage
+  - page.superpage

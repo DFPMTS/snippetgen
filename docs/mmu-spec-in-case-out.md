@@ -118,6 +118,20 @@ During build:
 
 `run_batch.py` only promotes MMU coverage for successful target results. Host command success alone is not enough; the XiangShan adapter must classify a semantic good result such as `HIT GOOD TRAP` with `finish_code: 0`.
 
+Use `mmu-coverage-summary` to read one or more ledgers or batch metadata files:
+
+```bash
+python3 generator/cli.py mmu-coverage-summary \
+  build/kmh_mmu_layer1_v2_smoke/runs/<batch_id>/batch_meta.json \
+  build/kmh_mmu_layer1_v3_smoke/runs/<batch_id>/batch_meta.json
+```
+
+The summary keeps each runner profile separate. When a batch entry selected MMU
+rules but the target run did not reach semantic success, the summary reports
+those selected rules and tags as `failed_or_blocked`. That is a derived reporting
+state; the persisted `mmu_coverage_ledger.json` still uses the original
+`generated_not_run` state.
+
 ## Commands
 
 Inspect the pilot plan:
@@ -172,13 +186,38 @@ The direct commands are:
 ```bash
 python3 generator/cli.py run suites/kmh_mmu_layer1_v2_smoke.yaml \
   --seed 241027 \
-  --timeout-sec 600 \
+  --timeout-sec 1800 \
   --runner-profile kmh-v2/difftest
 
 python3 generator/cli.py run suites/kmh_mmu_layer1_v3_smoke.yaml \
   --seed 241027 \
-  --timeout-sec 600 \
+  --timeout-sec 2400 \
   --runner-profile kmh-v3/difftest
+```
+
+Group baselines should use explicit runner profiles and a larger guest budget:
+
+```bash
+SNIPPETGEN_RUN_MAX_CYCLES=1200000 \
+SNIPPETGEN_RUN_MAX_INSTR=1200000 \
+python3 generator/cli.py run suites/kmh_mmu_layer1_host_perm.yaml \
+  --seed 241027 \
+  --timeout-sec 2400 \
+  --runner-profile kmh-v3/difftest \
+  --batch-id kmh_v3_host_perm
+```
+
+Repeat that command shape for `kmh_mmu_layer1_attr_ctrl.yaml`,
+`kmh_mmu_layer1_hyp.yaml`, and `kmh_mmu_layer1_faults.yaml`. v3 remains
+vector-free in this first layer; v2 vector MMU coverage should use a separate
+suite when it is added.
+
+Summarize v2/v3 smoke coverage after both runs:
+
+```bash
+python3 generator/cli.py mmu-coverage-summary \
+  build/kmh_mmu_layer1_v2_smoke/runs/<v2_batch>/batch_meta.json \
+  build/kmh_mmu_layer1_v3_smoke/runs/<v3_batch>/batch_meta.json
 ```
 
 Runner profiles are resolved from `../artifacts/kmh-runners/manifest.json`
@@ -209,11 +248,23 @@ prevents the two directories from becoming independent rule universes.
 
 ## Adding A Rule
 
-1. Add a YAML file under `snippets/mmu_rules/pilot/` or a new rule group.
+1. Add a YAML file under `snippets/mmu_rules/kmh_layer1/` for Kunminghu layer-1 coverage. Use `snippets/mmu_rules/pilot/` only for tiny interface smoke rules.
 2. Use only supported `requestor`, `mode`, `expect.result`, action phases, actions, and coverage tags.
-3. Add mappings under `setup.mappings`; use `stage: stage2` for guest-physical mappings and `fault: true` for fault probes.
-4. Add the rule id to a suite's `compose.mmu.rule_ids`.
-5. Run:
+3. Add mappings under `setup.mappings`; use `stage: stage2` for guest-physical mappings. For first-layer permission faults, `fault: true` means the runner emits a leaf PTE that removes the requestor-required permission before the handler repairs it.
+4. Add a single-case suite under `suites/kmh_mmu_layer1_case_<rule_id>.yaml`.
+5. Add the rule id to the matching group suite and to `suites/kmh_mmu_layer1_full.yaml` after the single-case build works.
+6. Run:
+
+```bash
+python3 -m unittest tests.test_mmu_rule_loader tests.test_mmu_rule_emitter tests.test_kmh_mmu_layer1_inventory -v
+python3 generator/cli.py dump-plan suites/kmh_mmu_layer1_case_<rule_id>.yaml
+python3 generator/cli.py build suites/kmh_mmu_layer1_case_<rule_id>.yaml
+```
+
+7. Run the single-case or containing group on both runner profiles, then check
+   `batch_meta.json`, `stdout.log`, and `mmu_coverage_ledger.json`.
+
+For the pilot directory, the equivalent smoke commands are:
 
 ```bash
 python3 -m unittest tests.test_mmu_rule_loader tests.test_mmu_rule_emitter -v
@@ -222,6 +273,15 @@ python3 generator/cli.py build suites/mmu_pilot_rules_poc.yaml
 ```
 
 If the new rule changes runtime behavior, also run a target-level XiangShan seed and check `batch_meta.json`, `stdout.log`, and `mmu_coverage_ledger.json`.
+
+## Deferred Scope
+
+The layer-1 rule runner checks architecture-visible results: hit/fault outcome,
+trap cause, translated memory value, and explicit control/fence effects. It
+does not claim coverage for ITLB/DTLB concurrent miss ownership, prefetch drop
+reason, PTW/L2TLB arbitration, merged-miss timing, replay cycle placement, or
+stale response pipeline kill. Those remain second-layer or monitor-backed
+verification work.
 
 ## Historical Design Material
 

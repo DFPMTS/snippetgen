@@ -103,18 +103,63 @@ make repro-vsetvl
 make repro-split-store
 ```
 
+### 4. Run Kunminghu MMU layer-1 suites
+
+Kunminghu v2 and v3 runs should use cached runner profiles. The profile names
+are resolved from `../artifacts/kmh-runners/manifest.json`, so these commands
+do not depend on the currently checked-out XiangShan branch.
+
+```bash
+python3 generator/cli.py run suites/kmh_mmu_layer1_v2_smoke.yaml \
+  --seed 241027 \
+  --timeout-sec 1800 \
+  --runner-profile kmh-v2/difftest \
+  --batch-id kmh_v2_mmu_smoke
+
+python3 generator/cli.py run suites/kmh_mmu_layer1_v3_smoke.yaml \
+  --seed 241027 \
+  --timeout-sec 2400 \
+  --runner-profile kmh-v3/difftest \
+  --batch-id kmh_v3_mmu_smoke
+```
+
+Group baselines use the same pattern with
+`suites/kmh_mmu_layer1_host_perm.yaml`,
+`suites/kmh_mmu_layer1_attr_ctrl.yaml`, `suites/kmh_mmu_layer1_hyp.yaml`, and
+`suites/kmh_mmu_layer1_faults.yaml`. Use a larger instruction/cycle budget for
+group runs:
+
+```bash
+SNIPPETGEN_RUN_MAX_CYCLES=1200000 \
+SNIPPETGEN_RUN_MAX_INSTR=1200000 \
+python3 generator/cli.py run suites/kmh_mmu_layer1_host_perm.yaml \
+  --seed 241027 \
+  --timeout-sec 2400 \
+  --runner-profile kmh-v3/difftest \
+  --batch-id kmh_v3_host_perm
+```
+
+After runs complete, summarize profile-separated MMU coverage:
+
+```bash
+python3 generator/cli.py mmu-coverage-summary \
+  build/kmh_mmu_layer1_host_perm/runs/kmh_v2_host_perm/batch_meta.json \
+  build/kmh_mmu_layer1_host_perm/runs/kmh_v3_host_perm/batch_meta.json
+```
+
 ## CLI Reference
 
 Run commands from the repository root with `python3 generator/cli.py <command> ...`.
 
-| Command             | Purpose                                                  |
-| ------------------- | -------------------------------------------------------- |
-| `list-snippets`     | List available snippet manifests.                        |
-| `list-suite-pools`  | List configured suite generation pools.                  |
-| `dump-plan <suite>` | Print the resolved suite plan without building.          |
-| `build [suite]`     | Generate the harness and build ELF/bin/disasm artifacts. |
-| `run <suite>`       | Build and run one suite on the selected target.          |
-| `generate-suites`   | Generate YAML suites from configured suite pools.        |
+| Command                       | Purpose                                                  |
+| ----------------------------- | -------------------------------------------------------- |
+| `list-snippets`               | List available snippet manifests.                        |
+| `list-suite-pools`            | List configured suite generation pools.                  |
+| `dump-plan <suite>`           | Print the resolved suite plan without building.          |
+| `build [suite]`               | Generate the harness and build ELF/bin/disasm artifacts. |
+| `run <suite>`                 | Build and run one suite on the selected target.          |
+| `generate-suites`             | Generate YAML suites from configured suite pools.        |
+| `mmu-coverage-summary <path>` | Summarize MMU coverage ledgers or batch metadata.        |
 
 `run` requires exactly one seed selector:
 
@@ -138,6 +183,15 @@ For the parser-defined interface, run:
 ```bash
 python3 generator/cli.py --help
 python3 generator/cli.py run --help
+```
+
+For MMU coverage, pass one or more `batch_meta.json` or
+`mmu_coverage_ledger.json` paths:
+
+```bash
+python3 generator/cli.py mmu-coverage-summary \
+  build/kmh_mmu_layer1_v2_smoke/runs/<batch_id>/batch_meta.json \
+  build/kmh_mmu_layer1_v3_smoke/runs/<batch_id>/batch_meta.json
 ```
 
 ## Project Layout
@@ -236,6 +290,10 @@ build/<suite>/runs/
   - smallest MMU rule-runner smoke suite with one bare identity rule
 - `suites/mmu_pilot_rules_poc.yaml`
   - pilot MMU rule bundle covering bare identity, Sv39 alias, superpage, `sfence` remap, load page fault, and two-stage guest-page-fault paths
+- `suites/kmh_mmu_layer1_v2_smoke.yaml` and `suites/kmh_mmu_layer1_v3_smoke.yaml`
+  - cached-runner smoke entries for Kunminghu v2/v3; v3 remains vector-free in this wave
+- `suites/kmh_mmu_layer1_host_perm.yaml`, `suites/kmh_mmu_layer1_attr_ctrl.yaml`, `suites/kmh_mmu_layer1_hyp.yaml`, and `suites/kmh_mmu_layer1_faults.yaml`
+  - group baselines for first-layer MMU permission, attribute/control, H-extension, and fault coverage
 
 ### Investigation and bug-hunting suites
 

@@ -1,0 +1,24 @@
+id: superpage_load_hit
+requestor: load
+mode: host_single_stage
+setup:
+  mappings:
+    - name: load_super_leaf
+      kind: superpage
+      va: 0x88200000
+      pa: 0x88200000
+      perms: [r, a, d]
+      page_count: 512
+trigger:
+  op: load
+  addr: load_super_leaf
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.load
+  - mode.host_single_stage
+  - page.superpage
+  - pte.r
+  - pte.a

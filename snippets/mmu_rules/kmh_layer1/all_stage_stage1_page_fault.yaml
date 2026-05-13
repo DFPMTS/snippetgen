@@ -1,0 +1,29 @@
+id: all_stage_stage1_page_fault
+requestor: hlv
+mode: allStage
+setup:
+  mappings:
+    - name: guest_stage1_fault
+      va: 0xc0000a000
+      pa: 0x80416000
+      perms: [r, a]
+      fault: true
+    - name: guest_stage2_reachable
+      stage: stage2
+      va: 0x80416000
+      pa: 0x80417000
+      perms: [r, a]
+trigger:
+  op: guest_load
+  addr: guest_stage1_fault
+expect:
+  result: page_fault
+observe:
+  - fault_cause_match
+coverage_tags:
+  - requestor.hlv
+  - mode.allStage
+  - guest.two_stage
+  - exception.page_fault
+  - pte.r
+  - pte.a

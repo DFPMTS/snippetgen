@@ -112,6 +112,8 @@ class MMURuleLoaderTest(unittest.TestCase):
             cases = (
                 ("hybrid_load", "requestor.hybrid_load", "hit"),
                 ("hlvx", "requestor.hlvx", "guest_page_fault"),
+                ("hlv", "requestor.hlv", "page_fault"),
+                ("hsv", "requestor.hsv", "page_fault"),
             )
             for requestor, tag, result in cases:
                 path = self.write_rule(

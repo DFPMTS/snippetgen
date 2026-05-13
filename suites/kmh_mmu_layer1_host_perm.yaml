@@ -12,9 +12,15 @@ compose:
     rule_ids:
       - raw_pte_load_hit
       - host_mxr_exec_load
+      - host_mxr_exec_load_fault
       - host_sum_user_load
+      - host_sum_user_load_fault
       - load_page_fault
       - store_page_fault
+      - load_read_perm_fault
+      - store_write_perm_fault
+      - load_accessed_bit_fault
+      - store_dirty_bit_fault
       - load_access_fault
       - store_access_fault
       - fault_repair_retry

@@ -102,6 +102,120 @@ class KMHMMULayer1InventoryTest(unittest.TestCase):
         self.assertLessEqual({"mode.onlyStage1", "mode.onlyStage2", "mode.allStage"}, set(plans["full"].mmu_coverage_tags))
         self.assertIn("retry.repair_then_reexecute", plans["full"].mmu_coverage_tags)
 
+    def test_permission_fault_rules_are_observable_and_suite_selected(self) -> None:
+        import yaml
+        from generator.xsgen.snippet_db import load_snippet_db
+        from generator.xsgen.suite_loader import build_compose_plan, load_suite
+
+        required = {
+            "load_read_perm_fault": {"requestor.load", "exception.page_fault", "pte.r", "pte.a"},
+            "store_write_perm_fault": {"requestor.store", "exception.page_fault", "pte.w", "pte.d"},
+            "hlvx_exec_perm_fault": {"requestor.hlvx", "exception.guest_page_fault", "pte.x", "pte.a"},
+            "host_mxr_exec_load_fault": {"requestor.load", "exception.page_fault", "priv.mxr", "pte.x"},
+            "host_sum_user_load_fault": {"requestor.load", "exception.page_fault", "priv.sum", "pte.u"},
+            "load_accessed_bit_fault": {"requestor.load", "exception.page_fault", "pte.a"},
+            "store_dirty_bit_fault": {"requestor.store", "exception.page_fault", "pte.d"},
+        }
+
+        for rule_id, tags in required.items():
+            with self.subTest(rule=rule_id):
+                rule = yaml.safe_load((KMH_RULE_DIR / f"{rule_id}.yaml").read_text())
+                expected_result = (
+                    "guest_page_fault"
+                    if "exception.guest_page_fault" in tags
+                    else "page_fault"
+                )
+                self.assertEqual(expected_result, rule["expect"]["result"])
+                self.assertIn("fault_cause_match", rule["observe"])
+                self.assertLessEqual(tags, set(rule["coverage_tags"]))
+                if rule_id in {"load_read_perm_fault", "store_write_perm_fault", "hlvx_exec_perm_fault"}:
+                    self.assertTrue(rule["setup"]["mappings"][0].get("fault"))
+
+        snippet_db = load_snippet_db(ROOT)
+        full_plan = build_compose_plan(load_suite(ROOT / "suites" / "kmh_mmu_layer1_full.yaml"), snippet_db)
+        host_perm_plan = build_compose_plan(load_suite(ROOT / "suites" / "kmh_mmu_layer1_host_perm.yaml"), snippet_db)
+        hyp_plan = build_compose_plan(load_suite(ROOT / "suites" / "kmh_mmu_layer1_hyp.yaml"), snippet_db)
+
+        self.assertLessEqual(set(required), set(full_plan.mmu_rule_ids))
+        self.assertLessEqual(set(required) - {"hlvx_exec_perm_fault"}, set(host_perm_plan.mmu_rule_ids))
+        self.assertIn("hlvx_exec_perm_fault", hyp_plan.mmu_rule_ids)
+
+    def test_two_stage_fault_rules_keep_stage_fault_classification_explicit(self) -> None:
+        import yaml
+        from generator.xsgen.snippet_db import load_snippet_db
+        from generator.xsgen.suite_loader import build_compose_plan, load_suite
+
+        stage1 = yaml.safe_load((KMH_RULE_DIR / "all_stage_stage1_page_fault.yaml").read_text())
+        stage2 = yaml.safe_load((KMH_RULE_DIR / "two_stage_fault.yaml").read_text())
+        only_stage2_rules = {
+            rule_id: yaml.safe_load((KMH_RULE_DIR / f"{rule_id}.yaml").read_text())
+            for rule_id in (
+                "only_stage2_hlv_guest_fault",
+                "hlvx_exec_perm_fault",
+                "only_stage2_hsv_guest_fault",
+            )
+        }
+
+        self.assertEqual("allStage", stage1["mode"])
+        self.assertEqual("page_fault", stage1["expect"]["result"])
+        self.assertIn("exception.page_fault", stage1["coverage_tags"])
+        self.assertNotIn("exception.guest_page_fault", stage1["coverage_tags"])
+        self.assertTrue(any(mapping.get("fault") and mapping.get("stage", "stage1") == "stage1" for mapping in stage1["setup"]["mappings"]))
+        self.assertTrue(any(mapping.get("stage") == "stage2" for mapping in stage1["setup"]["mappings"]))
+
+        self.assertEqual("guest_page_fault", stage2["expect"]["result"])
+        self.assertIn("exception.guest_page_fault", stage2["coverage_tags"])
+        self.assertTrue(any(mapping.get("fault") and mapping.get("stage") == "stage2" for mapping in stage2["setup"]["mappings"]))
+
+        for rule_id, rule in only_stage2_rules.items():
+            with self.subTest(rule=rule_id):
+                self.assertEqual("onlyStage2", rule["mode"])
+                self.assertEqual("guest_page_fault", rule["expect"]["result"])
+                self.assertIn("exception.guest_page_fault", rule["coverage_tags"])
+                self.assertTrue(any(mapping.get("fault") and mapping.get("stage") == "stage2" for mapping in rule["setup"]["mappings"]))
+
+        snippet_db = load_snippet_db(ROOT)
+        hyp_plan = build_compose_plan(load_suite(ROOT / "suites" / "kmh_mmu_layer1_hyp.yaml"), snippet_db)
+        self.assertLessEqual(
+            {"all_stage_stage1_page_fault", "two_stage_fault", *only_stage2_rules},
+            set(hyp_plan.mmu_rule_ids),
+        )
+
+    def test_superpage_rules_have_real_superpage_mappings_and_suite_coverage(self) -> None:
+        import yaml
+        from generator.xsgen.snippet_db import load_snippet_db
+        from generator.xsgen.suite_loader import build_compose_plan, load_suite
+
+        superpage_rules = {
+            "superpage": "store",
+            "superpage_load_hit": "load",
+            "only_stage2_superpage_hlv_hit": "hlv",
+            "all_stage_superpage_stage2_4k_hit": "hlv",
+        }
+
+        for rule_id, requestor in superpage_rules.items():
+            with self.subTest(rule=rule_id):
+                rule = yaml.safe_load((KMH_RULE_DIR / f"{rule_id}.yaml").read_text())
+                self.assertEqual(requestor, rule["requestor"])
+                self.assertIn("page.superpage", rule["coverage_tags"])
+                self.assertTrue(
+                    any(
+                        mapping.get("kind") == "superpage" and mapping.get("page_count") == 512
+                        for mapping in rule["setup"]["mappings"]
+                    )
+                )
+                if rule_id.startswith("only_stage2"):
+                    self.assertEqual("onlyStage2", rule["mode"])
+                    self.assertTrue(any(mapping.get("stage") == "stage2" for mapping in rule["setup"]["mappings"]))
+                if rule_id.startswith("all_stage"):
+                    self.assertEqual("allStage", rule["mode"])
+                    self.assertTrue(any(mapping.get("stage", "stage1") == "stage1" and mapping.get("kind") == "superpage" for mapping in rule["setup"]["mappings"]))
+                    self.assertTrue(any(mapping.get("stage") == "stage2" and mapping.get("page_count", 1) == 1 for mapping in rule["setup"]["mappings"]))
+
+        snippet_db = load_snippet_db(ROOT)
+        full_plan = build_compose_plan(load_suite(ROOT / "suites" / "kmh_mmu_layer1_full.yaml"), snippet_db)
+        self.assertLessEqual(set(superpage_rules), set(full_plan.mmu_rule_ids))
+
     def test_pbmt_rule_marks_reserved_nc_pte_semantics(self) -> None:
         import yaml
 
@@ -143,6 +257,7 @@ class KMHMMULayer1InventoryTest(unittest.TestCase):
 
         satp = yaml.safe_load((KMH_RULE_DIR / "satp_asid_switch.yaml").read_text())
         guest = yaml.safe_load((KMH_RULE_DIR / "vsatp_hgatp_context_switch.yaml").read_text())
+        stage2 = yaml.safe_load((KMH_RULE_DIR / "only_stage2_vmid_switch.yaml").read_text())
 
         satp_mappings = satp["setup"]["mappings"]
         self.assertGreaterEqual(len(satp_mappings), 2)
@@ -164,6 +279,24 @@ class KMHMMULayer1InventoryTest(unittest.TestCase):
         )
         self.assertTrue(
             any(mapping.get("context") == "switch" and mapping.get("stage") == "stage2" for mapping in guest_mappings)
+        )
+
+        stage2_mappings = stage2["setup"]["mappings"]
+        self.assertEqual("onlyStage2", stage2["mode"])
+        self.assertIn("switch_hgatp_context", stage2["actions"]["before_trigger"])
+        self.assertIn("hfence_gvma", stage2["actions"]["before_trigger"])
+        self.assertEqual(
+            1,
+            len({mapping["va"] for mapping in stage2_mappings}),
+            "onlyStage2 VMID switch rule must map the same GPA in old and switched G-stage roots",
+        )
+        self.assertGreater(
+            len({mapping["pa"] for mapping in stage2_mappings}),
+            1,
+            "onlyStage2 VMID switch rule must distinguish old and switched physical targets",
+        )
+        self.assertTrue(
+            any(mapping.get("context") == "switch" and mapping.get("stage") == "stage2" for mapping in stage2_mappings)
         )
 
     def test_rule_physical_targets_avoid_runtime_and_page_table_image_area(self) -> None:

@@ -1,0 +1,30 @@
+id: hlvx_exec_perm_fault
+requestor: hlvx
+mode: onlyStage2
+setup:
+  mappings:
+    - name: exec_perm_fault_page
+      stage: stage2
+      va: 0x80410000
+      pa: 0x80411000
+      perms: [x, a]
+      fault: true
+actions:
+  handler:
+    - repair_fault_mapping
+  post_check:
+    - record_fault_snapshot
+trigger:
+  op: hlvx_load
+  addr: exec_perm_fault_page
+expect:
+  result: guest_page_fault
+observe:
+  - fault_cause_match
+coverage_tags:
+  - requestor.hlvx
+  - mode.onlyStage2
+  - guest.vs_only
+  - exception.guest_page_fault
+  - pte.x
+  - pte.a

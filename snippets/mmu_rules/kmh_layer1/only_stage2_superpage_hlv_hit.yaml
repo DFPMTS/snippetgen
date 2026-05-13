@@ -1,0 +1,24 @@
+id: only_stage2_superpage_hlv_hit
+requestor: hlv
+mode: onlyStage2
+setup:
+  mappings:
+    - name: stage2_super_leaf
+      stage: stage2
+      kind: superpage
+      va: 0x80600000
+      pa: 0x80600000
+      perms: [r, a]
+      page_count: 512
+trigger:
+  op: guest_load
+  addr: stage2_super_leaf
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.hlv
+  - mode.onlyStage2
+  - guest.vs_only
+  - page.superpage

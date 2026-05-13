@@ -1,0 +1,13 @@
+suite: kmh_mmu_layer1_case_only_stage2_vmid_switch
+target: xiangshan-verilator
+seed: 241027
+compose:
+  mode: sequence
+  snippets:
+    - init_basic_env
+    - mmu_rule_runner_main
+    - finish_check
+  mmu:
+    rule_dir: ../snippets/mmu_rules/kmh_layer1
+    rule_ids:
+      - only_stage2_vmid_switch

@@ -1,0 +1,37 @@
+id: only_stage2_vmid_switch
+requestor: hlv
+mode: onlyStage2
+preconditions:
+  csr:
+    hgatp_vmid: 9
+setup:
+  mappings:
+    - name: vmid_stage2_page
+      stage: stage2
+      va: 0x80418000
+      pa: 0x80419000
+      perms: [r, a, d]
+    - name: vmid_stage2_page_switched
+      context: switch
+      stage: stage2
+      va: 0x80418000
+      pa: 0x8041a000
+      perms: [r, a, d]
+actions:
+  before_trigger:
+    - switch_hgatp_context
+    - hfence_gvma
+trigger:
+  op: guest_load
+  addr: vmid_stage2_page
+expect:
+  result: hit
+observe:
+  - memory_value_match
+coverage_tags:
+  - requestor.hlv
+  - mode.onlyStage2
+  - guest.vs_only
+  - ctrl.hgatp
+  - ctrl.vmid
+  - ctrl.hfence_gvma

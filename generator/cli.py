@@ -15,6 +15,10 @@ if str(REPO_ROOT) not in sys.path:
 from generator.xsgen.snippet_db import load_snippet_db
 from generator.xsgen.suite_loader import build_compose_plan, load_suite
 from generator.xsgen.emitter import emit_harness
+from generator.xsgen.mmu_coverage_summary import (
+    format_mmu_coverage_summary_text,
+    summarize_mmu_coverage,
+)
 from generator.xsgen.suite_generator import list_suite_pools, load_suite_pool, write_generated_suites
 from generator.xsgen.toolchain import artifact_paths_for_suite, build_artifacts
 from generator.xsgen.run_batch import normalize_seeds, run_suite_batch
@@ -130,6 +134,16 @@ def cmd_generate_suites(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_mmu_coverage_summary(args: argparse.Namespace) -> int:
+    paths = [Path(path) for path in args.paths]
+    summary = summarize_mmu_coverage(paths)
+    if args.json:
+        print(json.dumps(summary, indent=2, sort_keys=True))
+    else:
+        print(format_mmu_coverage_summary_text(summary))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="snippetgen")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -168,6 +182,11 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--output-dir")
     generate_parser.add_argument("--prefix")
     generate_parser.set_defaults(handler=cmd_generate_suites)
+
+    coverage_parser = subparsers.add_parser("mmu-coverage-summary")
+    coverage_parser.add_argument("paths", nargs="+")
+    coverage_parser.add_argument("--json", action="store_true")
+    coverage_parser.set_defaults(handler=cmd_mmu_coverage_summary)
 
     return parser
 

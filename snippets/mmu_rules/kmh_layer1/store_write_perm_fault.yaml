@@ -1,0 +1,28 @@
+id: store_write_perm_fault
+requestor: store
+mode: host_single_stage
+setup:
+  mappings:
+    - name: write_perm_fault_page
+      va: 0xb00009000
+      pa: 0x8102b000
+      perms: [r, w, a, d]
+      fault: true
+actions:
+  handler:
+    - repair_fault_mapping
+  post_check:
+    - record_fault_snapshot
+trigger:
+  op: store
+  addr: write_perm_fault_page
+expect:
+  result: page_fault
+observe:
+  - fault_cause_match
+coverage_tags:
+  - requestor.store
+  - mode.host_single_stage
+  - exception.page_fault
+  - pte.w
+  - pte.d

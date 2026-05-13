@@ -912,3 +912,151 @@ Result:
 - Focused review-fix unit suite: `Ran 44 tests`, `OK`.
 - Full unittest discovery: `Ran 259 tests`, `OK (skipped=1)`.
 - `git diff --check`: no whitespace errors.
+
+## 2026-05-12 RLCR baseline and first-layer gap pass
+
+This pass used the cached runner manifest at
+`/nfs/home/liujunqi/XS/artifacts/kmh-runners/manifest.json`.
+
+Runner revisions:
+
+- `kmh-v2/difftest`: XiangShan `f3cc750109cc2a0ff6c12a920221f1a5a324bc75`,
+  config `KunminghuV2Config`.
+- `kmh-v3/difftest`: XiangShan `689ee6be18a7483206754c53e2d7a327ed53eaa6`,
+  config `CHIConfig`.
+- NEMU reference: `43f6b0ce4aae3ee1171430bd9a0a55cbd833efc3`.
+
+Baseline smoke and group runs used seed `241027`. Smoke used
+`SNIPPETGEN_RUN_MAX_CYCLES=300000` and `SNIPPETGEN_RUN_MAX_INSTR=300000`.
+Group runs used `SNIPPETGEN_RUN_MAX_CYCLES=1200000` and
+`SNIPPETGEN_RUN_MAX_INSTR=1200000`.
+
+Initial baseline results before the gap-rule expansion:
+
+| Profile | Suite | Batch | Result |
+|---------|-------|-------|--------|
+| `kmh-v2/difftest` | `kmh_mmu_layer1_v2_smoke` | `build/kmh_mmu_layer1_v2_smoke/runs/kmh_v2_mmu_smoke_20260512_rlcr_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 70601`, `cycleCnt = 40961` |
+| `kmh-v3/difftest` | `kmh_mmu_layer1_v3_smoke` | `build/kmh_mmu_layer1_v3_smoke/runs/kmh_v3_mmu_smoke_20260512_rlcr_r0_retry1800/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 70594`, `cycleCnt = 41262` |
+| `kmh-v2/difftest` | `kmh_mmu_layer1_host_perm` | `build/kmh_mmu_layer1_host_perm/runs/kmh_v2_host_perm_20260512_rlcr_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 167140`, `cycleCnt = 83461` |
+| `kmh-v2/difftest` | `kmh_mmu_layer1_attr_ctrl` | `build/kmh_mmu_layer1_attr_ctrl/runs/kmh_v2_attr_ctrl_20260512_rlcr_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 145623`, `cycleCnt = 79981` |
+| `kmh-v2/difftest` | `kmh_mmu_layer1_hyp` | `build/kmh_mmu_layer1_hyp/runs/kmh_v2_hyp_20260512_rlcr_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 153256`, `cycleCnt = 82067` |
+| `kmh-v2/difftest` | `kmh_mmu_layer1_faults` | `build/kmh_mmu_layer1_faults/runs/kmh_v2_faults_20260512_rlcr_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 155644`, `cycleCnt = 84060` |
+| `kmh-v3/difftest` | `kmh_mmu_layer1_host_perm` | `build/kmh_mmu_layer1_host_perm/runs/kmh_v3_host_perm_20260512_rlcr_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 167133`, `cycleCnt = 85200` |
+| `kmh-v3/difftest` | `kmh_mmu_layer1_attr_ctrl` | `build/kmh_mmu_layer1_attr_ctrl/runs/kmh_v3_attr_ctrl_20260512_rlcr_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 145622`, `cycleCnt = 79204` |
+| `kmh-v3/difftest` | `kmh_mmu_layer1_hyp` | `build/kmh_mmu_layer1_hyp/runs/kmh_v3_hyp_20260512_rlcr_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 153253`, `cycleCnt = 81195` |
+| `kmh-v3/difftest` | `kmh_mmu_layer1_faults` | `build/kmh_mmu_layer1_faults/runs/kmh_v3_faults_20260512_rlcr_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 155642`, `cycleCnt = 84526` |
+
+The first v3 smoke attempt
+`build/kmh_mmu_layer1_v3_smoke/runs/kmh_v3_mmu_smoke_20260512_rlcr_r0/batch_meta.json`
+timed out at `--timeout-sec 600` before a semantic trap. The retry above used
+`--timeout-sec 1800` and completed normally.
+
+Smoke coverage summary example:
+
+```bash
+python3 generator/cli.py mmu-coverage-summary \
+  build/kmh_mmu_layer1_v2_smoke/runs/kmh_v2_mmu_smoke_20260512_rlcr_r0/batch_meta.json \
+  build/kmh_mmu_layer1_v3_smoke/runs/kmh_v3_mmu_smoke_20260512_rlcr_r0_retry1800/batch_meta.json
+```
+
+First-layer gap rules added in this pass:
+
+- Permission negatives: `load_read_perm_fault`,
+  `store_write_perm_fault`, `host_mxr_exec_load_fault`,
+  `host_sum_user_load_fault`, `load_accessed_bit_fault`,
+  `store_dirty_bit_fault`, and `hlvx_exec_perm_fault`.
+- Two-stage fault classification: `all_stage_stage1_page_fault`,
+  `only_stage2_hlv_guest_fault`, and `only_stage2_hsv_guest_fault`.
+- Superpage combinations: `superpage_load_hit`,
+  `only_stage2_superpage_hlv_hit`, and
+  `all_stage_superpage_stage2_4k_hit`.
+- Context/fence semantics: `only_stage2_vmid_switch`.
+
+Build validation:
+
+```bash
+python3 generator/cli.py build suites/kmh_mmu_layer1_full.yaml
+```
+
+The full build completed at `build/kmh_mmu_layer1_full/build_manifest.json`,
+and `mmu-coverage-summary build/kmh_mmu_layer1_full/mmu_coverage_ledger.json`
+reported 38 selected rules and 43 selected tags as `generated_not_run` with no
+taxonomy gaps.
+
+Single-case build validation also passed for every new `kmh_mmu_layer1_case_*`
+suite added with the gap rules.
+
+Current post-gap coverage summary example:
+
+```bash
+python3 generator/cli.py mmu-coverage-summary \
+  build/kmh_mmu_layer1_host_perm/runs/kmh_v2_host_perm_gap_rules_20260512_r0/batch_meta.json \
+  build/kmh_mmu_layer1_attr_ctrl/runs/kmh_v2_attr_ctrl_20260512_rlcr_r0/batch_meta.json \
+  build/kmh_mmu_layer1_hyp/runs/kmh_v2_hyp_current_20260512_r1/batch_meta.json \
+  build/kmh_mmu_layer1_faults/runs/kmh_v2_faults_current_20260512_r1/batch_meta.json \
+  build/kmh_mmu_layer1_host_perm/runs/kmh_v3_host_perm_gap_rules_20260512_r0/batch_meta.json \
+  build/kmh_mmu_layer1_attr_ctrl/runs/kmh_v3_attr_ctrl_20260512_rlcr_r0/batch_meta.json \
+  build/kmh_mmu_layer1_hyp/runs/kmh_v3_hyp_current_20260512_r1/batch_meta.json \
+  build/kmh_mmu_layer1_faults/runs/kmh_v3_faults_current_20260512_r1/batch_meta.json \
+  build/kmh_mmu_layer1_case_superpage_load_hit/runs/kmh_v2_case_superpage_load_hit_20260512_r1/batch_meta.json \
+  build/kmh_mmu_layer1_case_superpage_load_hit/runs/kmh_v3_case_superpage_load_hit_20260512_r1/batch_meta.json
+```
+
+This summary reported 10 successful entries. The current `hyp` run ledgers
+selected all 13 rules in `suites/kmh_mmu_layer1_hyp.yaml`, including
+`only_stage2_vmid_switch`. The current `faults` run ledgers selected all 17
+rules in `suites/kmh_mmu_layer1_faults.yaml`. The aggregate coverage view kept
+v2 and v3 profile states separate and had no taxonomy gaps.
+
+The older `kmh_v2_hyp_gap_rules_20260512_r0` and
+`kmh_v3_hyp_gap_rules_20260512_r0` batches selected 12 rules and are retained
+only as historical evidence. The older `kmh_v2_faults_20260512_rlcr_r0` and
+`kmh_v3_faults_20260512_rlcr_r0` batches selected 7 rules and are not current
+post-gap `faults` evidence.
+
+Current post-gap target validation:
+
+| Profile | Suite | Batch | Result | Coverage ledger state |
+|---------|-------|-------|--------|-----------------------|
+| `kmh-v2/difftest` | `kmh_mmu_layer1_host_perm` | `build/kmh_mmu_layer1_host_perm/runs/kmh_v2_host_perm_gap_rules_20260512_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 292242`, `cycleCnt = 135625` | selected 14 rules `ran`, 23 rules `defined_only`; permission-negative tags `pte.r`, `pte.w`, `pte.x`, `pte.u`, `pte.a`, and `pte.d` all `ran` |
+| `kmh-v3/difftest` | `kmh_mmu_layer1_host_perm` | `build/kmh_mmu_layer1_host_perm/runs/kmh_v3_host_perm_gap_rules_20260512_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 292242`, `cycleCnt = 140394` | selected 14 rules `ran`, 23 rules `defined_only`; permission-negative tags `pte.r`, `pte.w`, `pte.x`, `pte.u`, `pte.a`, and `pte.d` all `ran` |
+| `kmh-v2/difftest` | `kmh_mmu_layer1_hyp` | `build/kmh_mmu_layer1_hyp/runs/kmh_v2_hyp_current_20260512_r1/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 312862`, `cycleCnt = 152739` | selected 13 rules `ran`, 25 rules `defined_only`; includes `only_stage2_vmid_switch`; `ctrl.vmid`, `ctrl.hgatp`, `ctrl.vsatp`, `exception.page_fault`, `exception.guest_page_fault`, `requestor.hlv`, `requestor.hlvx`, `requestor.hsv`, `page.superpage`, `mode.onlyStage2`, and `mode.allStage` all `ran` |
+| `kmh-v3/difftest` | `kmh_mmu_layer1_hyp` | `build/kmh_mmu_layer1_hyp/runs/kmh_v3_hyp_current_20260512_r1/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 312861`, `cycleCnt = 152974` | selected 13 rules `ran`, 25 rules `defined_only`; includes `only_stage2_vmid_switch`; `ctrl.vmid`, `ctrl.hgatp`, `ctrl.vsatp`, `exception.page_fault`, `exception.guest_page_fault`, `requestor.hlv`, `requestor.hlvx`, `requestor.hsv`, `page.superpage`, `mode.onlyStage2`, and `mode.allStage` all `ran` |
+| `kmh-v2/difftest` | `kmh_mmu_layer1_faults` | `build/kmh_mmu_layer1_faults/runs/kmh_v2_faults_current_20260512_r1/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 370861`, `cycleCnt = 176776` | selected 17 rules `ran`, 21 rules `defined_only`; `exception.page_fault`, `exception.access_fault`, `exception.guest_page_fault`, `guest.two_stage`, `guest.vs_only`, `priv.mxr`, `priv.sum`, `pte.a`, `pte.d`, `pte.r`, `pte.w`, and `pte.x` all `ran` |
+| `kmh-v3/difftest` | `kmh_mmu_layer1_faults` | `build/kmh_mmu_layer1_faults/runs/kmh_v3_faults_current_20260512_r1/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 370859`, `cycleCnt = 181183` | selected 17 rules `ran`, 21 rules `defined_only`; `exception.page_fault`, `exception.access_fault`, `exception.guest_page_fault`, `guest.two_stage`, `guest.vs_only`, `priv.mxr`, `priv.sum`, `pte.a`, `pte.d`, `pte.r`, `pte.w`, and `pte.x` all `ran` |
+| `kmh-v2/difftest` | `kmh_mmu_layer1_case_superpage_load_hit` | `build/kmh_mmu_layer1_case_superpage_load_hit/runs/kmh_v2_case_superpage_load_hit_20260512_r1/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 19054`, `cycleCnt = 16334` | selected `superpage_load_hit` as `ran`; `requestor.load`, `mode.host_single_stage`, and `page.superpage` all `ran` |
+| `kmh-v3/difftest` | `kmh_mmu_layer1_case_superpage_load_hit` | `build/kmh_mmu_layer1_case_superpage_load_hit/runs/kmh_v3_case_superpage_load_hit_20260512_r1/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 19053`, `cycleCnt = 16141` | selected `superpage_load_hit` as `ran`; `requestor.load`, `mode.host_single_stage`, and `page.superpage` all `ran` |
+
+The v3 `hyp` group timeout from `kmh_v3_hyp_gap_rules_20260512_r0` did not
+reproduce with the current 13-rule suite in
+`kmh_v3_hyp_current_20260512_r1`, so no split-suite workaround is required for
+the current evidence set. Earlier single-case v3 runs also reached
+`HIT GOOD TRAP`:
+
+| Suite | Batch | Result |
+|-------|-------|--------|
+| `kmh_mmu_layer1_case_hlvx_exec_perm_fault` | `build/kmh_mmu_layer1_case_hlvx_exec_perm_fault/runs/kmh_v3_case_hlvx_exec_perm_fault_20260512_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 22148`, `cycleCnt = 18908` |
+| `kmh_mmu_layer1_case_all_stage_stage1_page_fault` | `build/kmh_mmu_layer1_case_all_stage_stage1_page_fault/runs/kmh_v3_case_all_stage_stage1_page_fault_20260512_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 26616`, `cycleCnt = 20851` |
+| `kmh_mmu_layer1_case_only_stage2_hlv_guest_fault` | `build/kmh_mmu_layer1_case_only_stage2_hlv_guest_fault/runs/kmh_v3_case_only_stage2_hlv_guest_fault_20260512_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 21355`, `cycleCnt = 18004` |
+| `kmh_mmu_layer1_case_only_stage2_hsv_guest_fault` | `build/kmh_mmu_layer1_case_only_stage2_hsv_guest_fault/runs/kmh_v3_case_only_stage2_hsv_guest_fault_20260512_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 21257`, `cycleCnt = 17900` |
+| `kmh_mmu_layer1_case_only_stage2_superpage_hlv_hit` | `build/kmh_mmu_layer1_case_only_stage2_superpage_hlv_hit/runs/kmh_v3_case_only_stage2_superpage_hlv_hit_20260512_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 19683`, `cycleCnt = 16828` |
+| `kmh_mmu_layer1_case_all_stage_superpage_stage2_4k_hit` | `build/kmh_mmu_layer1_case_all_stage_superpage_stage2_4k_hit/runs/kmh_v3_case_all_stage_superpage_stage2_4k_hit_20260512_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 25190`, `cycleCnt = 19962` |
+| `kmh_mmu_layer1_case_only_stage2_vmid_switch` | `build/kmh_mmu_layer1_case_only_stage2_vmid_switch/runs/kmh_v3_case_only_stage2_vmid_switch_20260512_r0/batch_meta.json` | `HIT GOOD TRAP`, `instrCnt = 25559`, `cycleCnt = 20140` |
+
+The same VMID/HGATP switch single-case also passed on v2:
+`build/kmh_mmu_layer1_case_only_stage2_vmid_switch/runs/kmh_v2_case_only_stage2_vmid_switch_20260512_r0/batch_meta.json`
+with `HIT GOOD TRAP`, `instrCnt = 25566`, and `cycleCnt = 20717`.
+
+Round validation:
+
+```bash
+python3 -m unittest tests.test_mmu_rule_loader tests.test_mmu_rule_emitter tests.test_kmh_mmu_layer1_inventory -v
+python3 -m unittest tests.test_mmu_coverage_summary tests.test_runner_profiles -v
+python3 generator/cli.py build suites/kmh_mmu_layer1_full.yaml
+```
+
+Results:
+
+- Focused MMU inventory/schema/emitter suite: `Ran 41 tests`, `OK`.
+- Coverage summary and runner profile suite: `Ran 11 tests`, `OK`.
+- Full KMH layer-1 build: completed.

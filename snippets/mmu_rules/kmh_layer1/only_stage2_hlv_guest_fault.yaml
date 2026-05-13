@@ -1,0 +1,25 @@
+id: only_stage2_hlv_guest_fault
+requestor: hlv
+mode: onlyStage2
+setup:
+  mappings:
+    - name: stage2_hlv_fault_page
+      stage: stage2
+      va: 0x80412000
+      pa: 0x80413000
+      perms: [r, a]
+      fault: true
+trigger:
+  op: guest_load
+  addr: stage2_hlv_fault_page
+expect:
+  result: guest_page_fault
+observe:
+  - fault_cause_match
+coverage_tags:
+  - requestor.hlv
+  - mode.onlyStage2
+  - guest.vs_only
+  - exception.guest_page_fault
+  - pte.r
+  - pte.a
