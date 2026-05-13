@@ -242,21 +242,27 @@ def _prepare_seed_run(
     )
 
 
-def _error_result(*, notes: str) -> TargetRunResult:
+def _error_result(*, notes: str, status: str, labels: tuple[str, ...]) -> TargetRunResult:
     return TargetRunResult(
-        status="error",
-        labels=("error",),
+        status=status,
+        labels=labels,
         notes=notes,
         returncode=None,
     )
 
 
-def _prepared_error_entry(*, prepared: _PreparedSeedRun, notes: str) -> RunEntry:
+def _prepared_error_entry(
+    *,
+    prepared: _PreparedSeedRun,
+    notes: str,
+    status: str,
+    labels: tuple[str, ...],
+) -> RunEntry:
     prepared.stderr_log_path.parent.mkdir(parents=True, exist_ok=True)
     prepared.stderr_log_path.write_text(f"{notes}\n")
     return _completed_entry(
         prepared=prepared,
-        target_result=_error_result(notes=notes),
+        target_result=_error_result(notes=notes, status=status, labels=labels),
     )
 
 
@@ -269,7 +275,12 @@ def _execute_prepared_seed(
     try:
         target_result = target_runner(artifacts=prepared.run_artifacts, timeout_s=timeout_s)
     except Exception as exc:
-        return _prepared_error_entry(prepared=prepared, notes=str(exc))
+        return _prepared_error_entry(
+            prepared=prepared,
+            notes=str(exc),
+            status="run_infra_fail",
+            labels=("run_infra_fail",),
+        )
     return _completed_entry(prepared=prepared, target_result=target_result)
 
 
@@ -364,7 +375,12 @@ def run_suite_batch(
                 run_meta_path=run_meta_path,
                 wave_path=wave_path,
             )
-            entry = _prepared_error_entry(prepared=prepared, notes=str(exc))
+            entry = _prepared_error_entry(
+                prepared=prepared,
+                notes=str(exc),
+                status="build_fail",
+                labels=("build_fail",),
+            )
             _write_run_meta(entry)
             entries_by_seed[seed] = entry
             continue

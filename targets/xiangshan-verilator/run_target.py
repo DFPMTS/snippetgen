@@ -16,6 +16,12 @@ DEFAULT_MAX_INSTR = 120000
 DEFAULT_TIMEOUT_SEC = 1800
 DEFAULT_FORK_INTERVAL_SEC = 10
 UNKNOWN_TRAP_CODE_RE = re.compile(r"Unknown trap code:\s*(\d+)")
+DIFFTEST_MISMATCH_LINE_RE = re.compile(
+    r"difftest.*(?:mismatch|not match|different|diverg|critical error)|"
+    r"(?:mismatch|not match|different|diverg|critical error).*difftest",
+    re.IGNORECASE,
+)
+CRITICAL_ERROR_LINE_RE = re.compile(r"hit critical error", re.IGNORECASE)
 
 
 def _xs_env() -> dict[str, str]:
@@ -78,14 +84,15 @@ def _error_result(
     *,
     artifacts,
     notes: str,
-    labels: tuple[str, ...] = ("error",),
+    status: str = "run_infra_fail",
+    labels: tuple[str, ...] = ("run_infra_fail",),
     runner_metadata: dict[str, str | None] | None = None,
 ) -> TargetRunResult:
     artifacts.stderr_log_path.write_text(f"{notes}\n")
     artifacts.stdout_log_path.write_text("")
     metadata = runner_metadata or {}
     return TargetRunResult(
-        status="error",
+        status=status,
         labels=labels,
         notes=notes,
         returncode=None,
@@ -142,9 +149,41 @@ def _attach_runner_metadata(
     )
 
 
+def _has_difftest_mismatch(text: str) -> bool:
+    return any(DIFFTEST_MISMATCH_LINE_RE.search(line) is not None for line in text.splitlines())
+
+
+def _has_critical_error(text: str) -> bool:
+    return any(CRITICAL_ERROR_LINE_RE.search(line) is not None for line in text.splitlines())
+
+
 def _classify_result(*, stdout_text: str, stderr_text: str, returncode: int) -> TargetRunResult:
     merged = f"{stdout_text}\n{stderr_text}"
     unknown_trap_match = UNKNOWN_TRAP_CODE_RE.search(merged)
+
+    if "Assertion failed" in merged:
+        return TargetRunResult(
+            status="abort",
+            labels=("built", "ran", "abort", "rtl_assert"),
+            notes="RTL assertion",
+            returncode=returncode,
+        )
+
+    if _has_difftest_mismatch(merged):
+        return TargetRunResult(
+            status="difftest_mismatch",
+            labels=("built", "ran", "difftest_mismatch"),
+            notes="difftest mismatch",
+            returncode=returncode,
+        )
+
+    if _has_critical_error(merged):
+        return TargetRunResult(
+            status="critical_error",
+            labels=("built", "ran", "critical_error"),
+            notes="critical error",
+            returncode=returncode,
+        )
 
     if "HIT GOOD TRAP" in merged:
         return TargetRunResult(
@@ -174,7 +213,7 @@ def _classify_result(*, stdout_text: str, stderr_text: str, returncode: int) -> 
             finish_code=finish_code,
         )
 
-    if "ABORT at pc" in merged or "Assertion failed" in merged:
+    if "ABORT at pc" in merged:
         return TargetRunResult(
             status="abort",
             labels=("built", "ran", "abort"),
@@ -232,7 +271,7 @@ def run_target(*, artifacts, timeout_s: int | None) -> TargetRunResult:
             return _error_result(
                 artifacts=artifacts,
                 notes=str(exc),
-                labels=("error", "runner_profile"),
+                labels=("run_infra_fail", "runner_profile"),
                 runner_metadata=runner_metadata,
             )
         emu_path = profile.emu_path
@@ -247,6 +286,8 @@ def run_target(*, artifacts, timeout_s: int | None) -> TargetRunResult:
         return _error_result(
             artifacts=artifacts,
             notes="missing bin artifact",
+            status="build_fail",
+            labels=("build_fail",),
             runner_metadata=runner_metadata,
         )
 
@@ -254,7 +295,7 @@ def run_target(*, artifacts, timeout_s: int | None) -> TargetRunResult:
         return _error_result(
             artifacts=artifacts,
             notes="runner missing: emu",
-            labels=("error", "runner_missing"),
+            labels=("run_infra_fail", "runner_missing"),
             runner_metadata=runner_metadata,
         )
 
@@ -262,7 +303,7 @@ def run_target(*, artifacts, timeout_s: int | None) -> TargetRunResult:
         return _error_result(
             artifacts=artifacts,
             notes=f"runner missing: {emu_path}",
-            labels=("error", "runner_missing"),
+            labels=("run_infra_fail", "runner_missing"),
             runner_metadata=runner_metadata,
         )
 
@@ -270,7 +311,7 @@ def run_target(*, artifacts, timeout_s: int | None) -> TargetRunResult:
         return _error_result(
             artifacts=artifacts,
             notes="runner missing: riscv64-nemu-interpreter-so",
-            labels=("error", "runner_missing"),
+            labels=("run_infra_fail", "runner_missing"),
             runner_metadata=runner_metadata,
         )
 
@@ -278,7 +319,7 @@ def run_target(*, artifacts, timeout_s: int | None) -> TargetRunResult:
         return _error_result(
             artifacts=artifacts,
             notes=f"runner missing: {diff_path}",
-            labels=("error", "runner_missing"),
+            labels=("run_infra_fail", "runner_missing"),
             runner_metadata=runner_metadata,
         )
 

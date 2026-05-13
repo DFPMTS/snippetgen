@@ -16,6 +16,15 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
+def load_xiangshan_run_target():
+    module_path = ROOT / "targets" / "xiangshan-verilator" / "run_target.py"
+    spec = importlib.util.spec_from_file_location("xiangshan_run_target_test", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class RunPipelineTest(unittest.TestCase):
     def setUp(self) -> None:
         self.run_root = ROOT / "build" / "vsetvl_interrupt_path_poc" / "runs"
@@ -298,11 +307,7 @@ class RunPipelineTest(unittest.TestCase):
         self.assertEqual(0, rc)
 
     def test_xiangshan_runner_falls_back_to_path_when_xs_env_is_absent(self) -> None:
-        module_path = ROOT / "targets" / "xiangshan-verilator" / "run_target.py"
-        spec = importlib.util.spec_from_file_location("xiangshan_run_target_test", module_path)
-        module = importlib.util.module_from_spec(spec)
-        assert spec is not None and spec.loader is not None
-        spec.loader.exec_module(module)
+        module = load_xiangshan_run_target()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tool_dir = Path(tmpdir)
@@ -323,11 +328,7 @@ class RunPipelineTest(unittest.TestCase):
         self.assertEqual(emu_path, resolved)
 
     def test_xiangshan_runner_does_not_infer_machine_specific_xs_env_path(self) -> None:
-        module_path = ROOT / "targets" / "xiangshan-verilator" / "run_target.py"
-        spec = importlib.util.spec_from_file_location("xiangshan_run_target_no_default_env_test", module_path)
-        module = importlib.util.module_from_spec(spec)
-        assert spec is not None and spec.loader is not None
-        spec.loader.exec_module(module)
+        module = load_xiangshan_run_target()
 
         with mock.patch.dict(
             module.os.environ,
@@ -341,11 +342,7 @@ class RunPipelineTest(unittest.TestCase):
         self.assertNotIn("NEMU_HOME", env)
 
     def test_xiangshan_runner_uses_xs_env_paths_and_diff_reference(self) -> None:
-        module_path = ROOT / "targets" / "xiangshan-verilator" / "run_target.py"
-        spec = importlib.util.spec_from_file_location("xiangshan_run_target_real_env_test", module_path)
-        module = importlib.util.module_from_spec(spec)
-        assert spec is not None and spec.loader is not None
-        spec.loader.exec_module(module)
+        module = load_xiangshan_run_target()
 
         model = importlib.import_module("generator.xsgen.model")
 
@@ -429,11 +426,7 @@ class RunPipelineTest(unittest.TestCase):
         self.assertNotIn("--dump-wave", command)
 
     def test_xiangshan_runner_default_budget_covers_mmu_pilot_path(self) -> None:
-        module_path = ROOT / "targets" / "xiangshan-verilator" / "run_target.py"
-        spec = importlib.util.spec_from_file_location("xiangshan_run_target_budget_test", module_path)
-        module = importlib.util.module_from_spec(spec)
-        assert spec is not None and spec.loader is not None
-        spec.loader.exec_module(module)
+        module = load_xiangshan_run_target()
 
         model = importlib.import_module("generator.xsgen.model")
 
@@ -506,11 +499,7 @@ class RunPipelineTest(unittest.TestCase):
         self.assertEqual(1800, captured["timeout"])
 
     def test_xiangshan_runner_classifies_limit_exceeded_from_logs(self) -> None:
-        module_path = ROOT / "targets" / "xiangshan-verilator" / "run_target.py"
-        spec = importlib.util.spec_from_file_location("xiangshan_run_target_limit_test", module_path)
-        module = importlib.util.module_from_spec(spec)
-        assert spec is not None and spec.loader is not None
-        spec.loader.exec_module(module)
+        module = load_xiangshan_run_target()
 
         model = importlib.import_module("generator.xsgen.model")
 
@@ -575,11 +564,7 @@ class RunPipelineTest(unittest.TestCase):
         self.assertIn("limit_exceeded", result.labels)
 
     def test_xiangshan_runner_classifies_bad_trap_from_logs(self) -> None:
-        module_path = ROOT / "targets" / "xiangshan-verilator" / "run_target.py"
-        spec = importlib.util.spec_from_file_location("xiangshan_run_target_bad_trap_test", module_path)
-        module = importlib.util.module_from_spec(spec)
-        assert spec is not None and spec.loader is not None
-        spec.loader.exec_module(module)
+        module = load_xiangshan_run_target()
 
         model = importlib.import_module("generator.xsgen.model")
 
@@ -644,11 +629,7 @@ class RunPipelineTest(unittest.TestCase):
         self.assertIn("bad_trap", result.labels)
 
     def test_xiangshan_runner_sets_finish_code_one_for_bad_trap(self) -> None:
-        module_path = ROOT / "targets" / "xiangshan-verilator" / "run_target.py"
-        spec = importlib.util.spec_from_file_location("xiangshan_run_target_bad_trap_code_test", module_path)
-        module = importlib.util.module_from_spec(spec)
-        assert spec is not None and spec.loader is not None
-        spec.loader.exec_module(module)
+        module = load_xiangshan_run_target()
 
         model = importlib.import_module("generator.xsgen.model")
 
@@ -713,11 +694,7 @@ class RunPipelineTest(unittest.TestCase):
         self.assertEqual(1, result.finish_code)
 
     def test_xiangshan_runner_classifies_unknown_trap_code_from_logs(self) -> None:
-        module_path = ROOT / "targets" / "xiangshan-verilator" / "run_target.py"
-        spec = importlib.util.spec_from_file_location("xiangshan_run_target_unknown_trap_test", module_path)
-        module = importlib.util.module_from_spec(spec)
-        assert spec is not None and spec.loader is not None
-        spec.loader.exec_module(module)
+        module = load_xiangshan_run_target()
 
         model = importlib.import_module("generator.xsgen.model")
 
@@ -784,11 +761,7 @@ class RunPipelineTest(unittest.TestCase):
         self.assertEqual(27, result.finish_code)
 
     def test_xiangshan_runner_classifies_abort_from_logs(self) -> None:
-        module_path = ROOT / "targets" / "xiangshan-verilator" / "run_target.py"
-        spec = importlib.util.spec_from_file_location("xiangshan_run_target_abort_test", module_path)
-        module = importlib.util.module_from_spec(spec)
-        assert spec is not None and spec.loader is not None
-        spec.loader.exec_module(module)
+        module = load_xiangshan_run_target()
 
         model = importlib.import_module("generator.xsgen.model")
 
@@ -852,6 +825,225 @@ class RunPipelineTest(unittest.TestCase):
 
         self.assertEqual("abort", result.status)
         self.assertIn("abort", result.labels)
+        self.assertIn("rtl_assert", result.labels)
+        self.assertEqual("RTL assertion", result.notes)
+
+    def test_xiangshan_runner_classifies_plain_abort_without_assert_label(self) -> None:
+        module = load_xiangshan_run_target()
+
+        model = importlib.import_module("generator.xsgen.model")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            xs_env_root = root / "xs-env"
+            env_sh = xs_env_root / "env.sh"
+            emu_path = xs_env_root / "XiangShan" / "build" / "verilator-compile" / "emu"
+            diff_path = xs_env_root / "NEMU" / "build" / "riscv64-nemu-interpreter-so"
+            build_dir = root / "build"
+            bin_path = build_dir / "test.bin"
+            elf_path = build_dir / "test.elf"
+            stdout_log_path = build_dir / "stdout.log"
+            stderr_log_path = build_dir / "stderr.log"
+            run_meta_path = build_dir / "run_meta.json"
+
+            emu_path.parent.mkdir(parents=True, exist_ok=True)
+            diff_path.parent.mkdir(parents=True, exist_ok=True)
+            build_dir.mkdir(parents=True, exist_ok=True)
+
+            env_sh.write_text("#!/bin/sh\n")
+            emu_path.write_text("#!/bin/sh\nexit 1\n")
+            emu_path.chmod(0o755)
+            diff_path.write_text("stub diff\n")
+            bin_path.write_bytes(b"\x00")
+            elf_path.write_bytes(b"\x00")
+            stdout_log_path.write_text("")
+            stderr_log_path.write_text("")
+
+            artifacts = model.RunSeedArtifacts(
+                suite_name="demo",
+                target="xiangshan-verilator",
+                seed=4660,
+                run_batch="batch",
+                build_artifact=model.BuildArtifact(
+                    suite_name="demo",
+                    build_dir=build_dir,
+                    generated_suite_path=build_dir / "generated_suite.c",
+                    elf_path=elf_path,
+                    bin_path=bin_path,
+                    build_manifest_path=build_dir / "build_manifest.json",
+                ),
+                stdout_log_path=stdout_log_path,
+                stderr_log_path=stderr_log_path,
+                run_meta_path=run_meta_path,
+                wave_path=build_dir / "lightsss-wave",
+            )
+
+            def fake_run(command, **kwargs):
+                kwargs["stdout"].write("Core 0: ABORT at pc = 0x80000174\n")
+                kwargs["stdout"].flush()
+                return subprocess.CompletedProcess(command, 1)
+
+            with mock.patch.dict(
+                module.os.environ,
+                {"SNIPPETGEN_XS_ENV_SH": str(env_sh)},
+                clear=False,
+            ):
+                with mock.patch.object(module.subprocess, "run", side_effect=fake_run):
+                    result = module.run_target(artifacts=artifacts, timeout_s=5)
+
+        self.assertEqual("abort", result.status)
+        self.assertIn("abort", result.labels)
+        self.assertNotIn("rtl_assert", result.labels)
+        self.assertEqual("ABORT", result.notes)
+
+    def test_xiangshan_runner_plain_abort_does_not_confuse_perf_mismatch_with_difftest(self) -> None:
+        module = load_xiangshan_run_target()
+
+        result = module._classify_result(
+            stdout_text="The first instruction of core 0 has commited. Difftest enabled.\nCore 0: ABORT at pc = 0x80000174\n",
+            stderr_text="[PERF] load_to_load_forward_fail_wakeup_mismatch, 0\n",
+            returncode=1,
+        )
+
+        self.assertEqual("abort", result.status)
+        self.assertIn("abort", result.labels)
+        self.assertNotIn("difftest_mismatch", result.labels)
+
+    def test_xiangshan_runner_classifies_difftest_mismatch_from_logs(self) -> None:
+        module = load_xiangshan_run_target()
+
+        model = importlib.import_module("generator.xsgen.model")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            xs_env_root = root / "xs-env"
+            env_sh = xs_env_root / "env.sh"
+            emu_path = xs_env_root / "XiangShan" / "build" / "verilator-compile" / "emu"
+            diff_path = xs_env_root / "NEMU" / "build" / "riscv64-nemu-interpreter-so"
+            build_dir = root / "build"
+            bin_path = build_dir / "test.bin"
+            elf_path = build_dir / "test.elf"
+            stdout_log_path = build_dir / "stdout.log"
+            stderr_log_path = build_dir / "stderr.log"
+            run_meta_path = build_dir / "run_meta.json"
+
+            emu_path.parent.mkdir(parents=True, exist_ok=True)
+            diff_path.parent.mkdir(parents=True, exist_ok=True)
+            build_dir.mkdir(parents=True, exist_ok=True)
+
+            env_sh.write_text("#!/bin/sh\n")
+            emu_path.write_text("#!/bin/sh\nexit 1\n")
+            emu_path.chmod(0o755)
+            diff_path.write_text("stub diff\n")
+            bin_path.write_bytes(b"\x00")
+            elf_path.write_bytes(b"\x00")
+            stdout_log_path.write_text("")
+            stderr_log_path.write_text("")
+
+            artifacts = model.RunSeedArtifacts(
+                suite_name="demo",
+                target="xiangshan-verilator",
+                seed=4660,
+                run_batch="batch",
+                build_artifact=model.BuildArtifact(
+                    suite_name="demo",
+                    build_dir=build_dir,
+                    generated_suite_path=build_dir / "generated_suite.c",
+                    elf_path=elf_path,
+                    bin_path=bin_path,
+                    build_manifest_path=build_dir / "build_manifest.json",
+                ),
+                stdout_log_path=stdout_log_path,
+                stderr_log_path=stderr_log_path,
+                run_meta_path=run_meta_path,
+                wave_path=build_dir / "lightsss-wave",
+            )
+
+            def fake_run(command, **kwargs):
+                kwargs["stderr"].write("Difftest mismatch: pc expected 0x80000000 actual 0x80000004\n")
+                kwargs["stderr"].flush()
+                return subprocess.CompletedProcess(command, 1)
+
+            with mock.patch.dict(
+                module.os.environ,
+                {"SNIPPETGEN_XS_ENV_SH": str(env_sh)},
+                clear=False,
+            ):
+                with mock.patch.object(module.subprocess, "run", side_effect=fake_run):
+                    result = module.run_target(artifacts=artifacts, timeout_s=5)
+
+        self.assertEqual("difftest_mismatch", result.status)
+        self.assertIn("difftest_mismatch", result.labels)
+        self.assertEqual("difftest mismatch", result.notes)
+
+    def test_xiangshan_runner_prioritizes_failure_markers_over_good_trap(self) -> None:
+        module = load_xiangshan_run_target()
+
+        mismatch_result = module._classify_result(
+            stdout_text="HIT GOOD TRAP\n",
+            stderr_text="Difftest mismatch: pc expected 0x80000000 actual 0x80000004\n",
+            returncode=1,
+        )
+        critical_result = module._classify_result(
+            stdout_text="HIT GOOD TRAP\nCore 0 dump: HIT CRITICAL ERROR: please check if software cause a double trap.\n",
+            stderr_text="",
+            returncode=1,
+        )
+
+        self.assertEqual("difftest_mismatch", mismatch_result.status)
+        self.assertIn("difftest_mismatch", mismatch_result.labels)
+        self.assertEqual("critical_error", critical_result.status)
+        self.assertIn("critical_error", critical_result.labels)
+
+    def test_xiangshan_runner_missing_profile_is_run_infra_fail(self) -> None:
+        module = load_xiangshan_run_target()
+
+        model = importlib.import_module("generator.xsgen.model")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            build_dir = root / "build"
+            bin_path = build_dir / "test.bin"
+            elf_path = build_dir / "test.elf"
+            stdout_log_path = build_dir / "stdout.log"
+            stderr_log_path = build_dir / "stderr.log"
+            run_meta_path = build_dir / "run_meta.json"
+
+            build_dir.mkdir(parents=True, exist_ok=True)
+            bin_path.write_bytes(b"\x00")
+            elf_path.write_bytes(b"\x00")
+            stdout_log_path.write_text("")
+            stderr_log_path.write_text("")
+
+            artifacts = model.RunSeedArtifacts(
+                suite_name="demo",
+                target="xiangshan-verilator",
+                seed=4660,
+                run_batch="batch",
+                build_artifact=model.BuildArtifact(
+                    suite_name="demo",
+                    build_dir=build_dir,
+                    generated_suite_path=build_dir / "generated_suite.c",
+                    elf_path=elf_path,
+                    bin_path=bin_path,
+                    build_manifest_path=build_dir / "build_manifest.json",
+                ),
+                stdout_log_path=stdout_log_path,
+                stderr_log_path=stderr_log_path,
+                run_meta_path=run_meta_path,
+                runner_profile="missing-profile",
+            )
+
+            with mock.patch.dict(
+                module.os.environ,
+                {"SNIPPETGEN_KMH_RUNNER_MANIFEST": str(root / "missing-manifest.json")},
+                clear=True,
+            ):
+                result = module.run_target(artifacts=artifacts, timeout_s=5)
+
+        self.assertEqual("run_infra_fail", result.status)
+        self.assertIn("run_infra_fail", result.labels)
+        self.assertIn("runner_profile", result.labels)
 
     def test_run_batch_writes_seed_isolated_artifacts_and_batch_meta(self) -> None:
         run_batch = importlib.import_module("generator.xsgen.run_batch")
@@ -1041,7 +1233,8 @@ class RunPipelineTest(unittest.TestCase):
 
         payload = json.loads(ledger_path.read_text())
         self.assertEqual([21, 22], sorted(seen))
-        self.assertEqual(["error", "ran"], [entry["status"] for entry in payload["entries"]])
+        self.assertEqual(["run_infra_fail", "ran"], [entry["status"] for entry in payload["entries"]])
+        self.assertIn("run_infra_fail", payload["entries"][0]["labels"])
 
     def test_failed_run_still_writes_meta_and_logs(self) -> None:
         run_batch = importlib.import_module("generator.xsgen.run_batch")
@@ -1064,13 +1257,45 @@ class RunPipelineTest(unittest.TestCase):
         )
 
         ledger = json.loads(ledger_path.read_text())
-        self.assertEqual("error", ledger["entries"][0]["status"])
-        self.assertIn("error", ledger["entries"][0]["labels"])
+        self.assertEqual("run_infra_fail", ledger["entries"][0]["status"])
+        self.assertIn("run_infra_fail", ledger["entries"][0]["labels"])
 
         seed_dir = self.run_root / "failing-batch" / "seed_21"
         self.assertTrue((seed_dir / "stdout.log").is_file())
         self.assertTrue((seed_dir / "stderr.log").is_file())
         self.assertTrue((seed_dir / "run_meta.json").is_file())
+
+    def test_run_batch_classifies_build_prepare_failure_as_build_fail(self) -> None:
+        run_batch = importlib.import_module("generator.xsgen.run_batch")
+
+        def fake_target_loader(repo_root: Path, target: str):
+            def run_target(*, artifacts, timeout_s):
+                raise AssertionError("target runner should not run after build failure")
+
+            return run_target
+
+        def fake_emit(plan, generated_suite_path):
+            generated_suite_path.parent.mkdir(parents=True, exist_ok=True)
+            generated_suite_path.write_text("int main(void) { return 0; }\n")
+
+        def fake_build(repo_root, plan, artifact):
+            raise RuntimeError("simulated build failure")
+
+        with mock.patch.object(run_batch, "emit_harness", side_effect=fake_emit):
+            with mock.patch.object(run_batch, "build_artifacts", side_effect=fake_build):
+                ledger_path = run_batch.run_suite_batch(
+                    repo_root=ROOT,
+                    suite_path=ROOT / "suites" / "vsetvl_interrupt_path_poc.yaml",
+                    seed_values=(23,),
+                    target_loader=fake_target_loader,
+                    run_batch_id="build-failure",
+                )
+
+        ledger = json.loads(ledger_path.read_text())
+        run_meta = json.loads((self.run_root / "build-failure" / "seed_23" / "run_meta.json").read_text())
+        self.assertEqual("build_fail", ledger["entries"][0]["status"])
+        self.assertIn("build_fail", ledger["entries"][0]["labels"])
+        self.assertEqual("build_fail", run_meta["status"])
 
     def test_run_batch_default_batch_id_avoids_shared_top_level_writes(self) -> None:
         run_batch = importlib.import_module("generator.xsgen.run_batch")
@@ -1189,7 +1414,7 @@ class RunPipelineTest(unittest.TestCase):
 
         batch_ledger = json.loads(ledger_path.read_text())
         seed_dir = self.mmu_run_root / "mmu-coverage-demo" / "seed_17"
-        if batch_ledger["entries"][0]["status"] == "error":
+        if batch_ledger["entries"][0]["status"] in {"error", "build_fail"}:
             error_note = batch_ledger["entries"][0]["notes"]
             if (
                 "unknown z ISA extension `zicbop'" in error_note
