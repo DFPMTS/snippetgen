@@ -153,8 +153,10 @@ python3 generator/cli.py mmu-coverage-summary \
 ```
 
 The v2 vector MMU smoke suite is intentionally separate from the v2/v3 scalar
-baseline. It emits real unit-stride vector load/store instructions with local
-`.word` encodings and keeps the global toolchain ISA at `rv64gc`.
+baseline. It emits real unit-stride vector load instructions with local `.word`
+encodings and keeps the global toolchain ISA at `rv64gc`. The smoke suite is
+the pass-only short path: Bare load hit, Sv39 host load hit, and one vector
+load page-fault recovery case.
 
 ```bash
 SNIPPETGEN_RUN_MAX_CYCLES=300000 \
@@ -163,11 +165,110 @@ python3 generator/cli.py run suites/kmh_mmu_layer1_v2_vector_smoke.yaml \
   --seed 241027 \
   --timeout-sec 1800 \
   --runner-profile kmh-v2/difftest \
-  --batch-id kmh_v2_vector_mmu_<date>
+  --batch-id kmh_v2_vector_smoke_<date>
 ```
 
 Do not run this suite as v3 evidence. The v3 smoke/full MMU suites stay
 vector-free until a separate v3 vector plan exists.
+
+The no-fence vector load/store replay assertion shape is kept in a separate
+repro suite. It is expected to fail on the current v2 runner and should not be
+used as pass-only regression evidence:
+
+```bash
+SNIPPETGEN_RUN_MAX_CYCLES=300000 \
+SNIPPETGEN_RUN_MAX_INSTR=300000 \
+python3 generator/cli.py run suites/kmh_mmu_layer1_v2_vector_replay_repro.yaml \
+  --seed 241027 \
+  --timeout-sec 1800 \
+  --runner-profile kmh-v2/difftest \
+  --batch-id kmh_v2_vector_replay_repro_<date>
+```
+
+The v2-only vector MMU layer is split into focused suites. Keep the
+`SNIPPETGEN_RUN_MAX_*` budget on target runs; the default target budget is too
+small for some fault/form cases and can misclassify a valid run as
+`limit_exceeded`.
+
+```bash
+SNIPPETGEN_RUN_MAX_CYCLES=300000 \
+SNIPPETGEN_RUN_MAX_INSTR=300000 \
+python3 generator/cli.py run suites/kmh_mmu_layer1_v2_vector_widths.yaml \
+  --seed 241027 \
+  --timeout-sec 1800 \
+  --runner-profile kmh-v2/difftest \
+  --batch-id kmh_v2_vector_widths_<date>
+
+SNIPPETGEN_RUN_MAX_CYCLES=300000 \
+SNIPPETGEN_RUN_MAX_INSTR=300000 \
+python3 generator/cli.py run suites/kmh_mmu_layer1_v2_vector_faults.yaml \
+  --seed 241027 \
+  --timeout-sec 1800 \
+  --runner-profile kmh-v2/difftest \
+  --batch-id kmh_v2_vector_faults_<date>
+
+SNIPPETGEN_RUN_MAX_CYCLES=300000 \
+SNIPPETGEN_RUN_MAX_INSTR=300000 \
+python3 generator/cli.py run suites/kmh_mmu_layer1_v2_vector_forms.yaml \
+  --seed 241027 \
+  --timeout-sec 1800 \
+  --runner-profile kmh-v2/difftest \
+  --batch-id kmh_v2_vector_forms_<date>
+
+SNIPPETGEN_RUN_MAX_CYCLES=300000 \
+SNIPPETGEN_RUN_MAX_INSTR=300000 \
+python3 generator/cli.py run suites/kmh_mmu_layer1_v2_vector_attr.yaml \
+  --seed 241027 \
+  --timeout-sec 1800 \
+  --runner-profile kmh-v2/difftest \
+  --batch-id kmh_v2_vector_attr_<date>
+
+SNIPPETGEN_RUN_MAX_CYCLES=300000 \
+SNIPPETGEN_RUN_MAX_INSTR=300000 \
+python3 generator/cli.py run suites/kmh_mmu_layer1_v2_vector_hyp.yaml \
+  --seed 241027 \
+  --timeout-sec 1800 \
+  --runner-profile kmh-v2/difftest \
+  --batch-id kmh_v2_vector_hyp_<date>
+```
+
+`vector_widths` covers `e8/e16/e32/e64` unit-stride load/store hit under Sv39
+host translation. `vector_faults` covers cross-page second-page faults and
+masked load/store fault suppression or triggering. `vector_forms` covers
+strided, indexed, segment, fault-only-first, and `vstart` cases. `vector_attr`
+covers PMP/PMA/PBMT/NC/MMIO attribute scenarios. `vector_hyp` covers ordinary
+vector load/store cases under representative H-extension translation modes.
+Current target evidence should be read per sub-suite: PMP load/store, PBMT,
+and the translated MMIO access-fault attribute cases pass in both isolated and
+aggregate attr runs. The old no-fault `vle64.v` plus `vse64.v` translated-MMIO
+store-back shape is preserved as a separate failing repro. The H-extension
+vector suites now good-trap for onlyStage1, onlyStage2, and allStage
+representatives in both isolated and aggregate runs. The live blocker is the
+no-fence vector replay repro.
+
+Vector suites emit `vector_mmu_coverage.json` instead of scalar
+`mmu_coverage_ledger.json`. Each vector coverage item may also carry
+`fail_codes` metadata so a late self-check failure can preserve the completed
+prefix as `ran`, the failing item as `failed_or_blocked`, and the remaining
+suffix as `generated_not_run` instead of flattening the whole suite to one
+state. Summarize current vector evidence with one or more batch metadata paths:
+
+```bash
+python3 generator/cli.py mmu-coverage-summary \
+  build/kmh_mmu_layer1_v2_vector_smoke/runs/kmh_v2_vector_smoke_20260520_r13_loadonly/batch_meta.json \
+  build/kmh_mmu_layer1_v2_vector_widths/runs/kmh_v2_vector_widths_20260520_r13_loadonly/batch_meta.json \
+  build/kmh_mmu_layer1_v2_vector_faults/runs/kmh_v2_vector_faults_20260520_r13_loadonly/batch_meta.json \
+  build/kmh_mmu_layer1_v2_vector_forms/runs/kmh_v2_vector_forms_20260520_r13_loadonly/batch_meta.json \
+  build/kmh_mmu_layer1_v2_vector_attr/runs/kmh_v2_vector_attr_20260520_r13_loadonly/batch_meta.json \
+  build/kmh_mmu_layer1_v2_vector_hyp/runs/kmh_v2_vector_hyp_20260520_r13_loadonly/batch_meta.json \
+  build/kmh_mmu_layer1_v2_vector_attr_mmio_identity_repro/runs/kmh_v2_vector_attr_mmio_identity_repro_20260520_r13_bug/batch_meta.json \
+  build/kmh_mmu_layer1_v2_vector_replay_repro/runs/kmh_v2_vector_replay_repro_20260520_r13_nofence/batch_meta.json
+```
+
+If a target run fails, record the failure as evidence; do not add unrelated
+instructions, fences, padding, or lower-stress variants to turn a failing case
+into a pass-only regression. Keep bug repros and any future pass-only reduced
+suite separate.
 
 ## CLI Reference
 
@@ -315,7 +416,17 @@ build/<suite>/runs/
 - `suites/kmh_mmu_layer1_v2_smoke.yaml` and `suites/kmh_mmu_layer1_v3_smoke.yaml`
   - cached-runner smoke entries for Kunminghu v2/v3; v3 remains vector-free in this wave
 - `suites/kmh_mmu_layer1_v2_vector_smoke.yaml`
-  - v2-only vector memory MMU smoke covering vector enable, Bare hit, Sv39 host single-stage hit, cross-4K valid access, and basic vector load/store page-fault and permission-fault checks
+  - v2-only vector memory MMU stable smoke covering vector enable, Bare hit, Sv39 host single-stage hit, and one vector load page-fault recovery check
+- `suites/kmh_mmu_layer1_v2_vector_replay_repro.yaml`
+  - v2-only no-fence vector replay assertion repro; keep separate from pass-only regression evidence
+- `suites/kmh_mmu_layer1_v2_vector_widths.yaml`
+  - v2-only vector memory MMU width suite covering `e8/e16/e32/e64` unit-stride load/store hit under Sv39 host translation
+- `suites/kmh_mmu_layer1_v2_vector_faults.yaml`
+  - v2-only vector memory MMU fault suite covering cross-page second-page faults and masked load/store fault behavior
+- `suites/kmh_mmu_layer1_v2_vector_attr*.yaml`
+  - v2-only vector memory MMU attribute witnesses; PMP load/store, MMIO access-fault, and PBMT sub-suites pass on the v2 runner, while the old no-fault MMIO store-back shape remains isolated as a repro
+- `suites/kmh_mmu_layer1_v2_vector_hyp*.yaml`
+  - v2-only vector memory MMU H-extension witnesses; onlyStage1, onlyStage2, allStage isolated sub-suites and aggregate hyp now pass on the v2 runner
 - `suites/kmh_mmu_layer1_host_perm.yaml`, `suites/kmh_mmu_layer1_attr_ctrl.yaml`, `suites/kmh_mmu_layer1_hyp.yaml`, and `suites/kmh_mmu_layer1_faults.yaml`
   - group baselines for first-layer MMU permission, attribute/control, H-extension, and fault coverage
 

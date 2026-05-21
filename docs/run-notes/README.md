@@ -22,3 +22,5 @@ Use these notes when you need to confirm that a suite family was exercised on a 
   - random suite generation batch evidence
 - [`2026-04-21-scalar-misalign-seeded-deterministic-run-notes.md`](2026-04-21-scalar-misalign-seeded-deterministic-run-notes.md)
   - seeded deterministic scalar misalign evidence
+- [`2026-05-19-kmh-v2-vector-mmu-next-run-notes.md`](2026-05-19-kmh-v2-vector-mmu-next-run-notes.md)
+  - Kunminghu v2 vector MMU width/fault suite commands and failure-recording policy

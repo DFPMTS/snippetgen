@@ -226,10 +226,11 @@ python3 generator/cli.py run suites/kmh_mmu_layer1_v2_vector_smoke.yaml \
   --batch-id kmh_v2_vector_mmu_<date>
 ```
 
-This suite currently covers unit-stride `vle8.v`/`vse8.v` behavior for Bare
-hit, Sv39 host single-stage hit, a valid cross-4K load/store, vector load/store
-page faults, and vector load/store permission faults. The vector cases use
-local encoded instructions and leave the global `-march` unchanged.
+This suite currently covers the pass-only unit-stride `vle8.v` smoke path for
+Bare hit, Sv39 host single-stage hit, and one vector load page-fault recovery
+check. Broader vector load/store forms and the known no-fence load/store replay
+shape live in separate v2-only suites. The vector cases use local encoded
+instructions and leave the global `-march` unchanged.
 
 Summarize v2/v3 smoke coverage after both runs:
 
