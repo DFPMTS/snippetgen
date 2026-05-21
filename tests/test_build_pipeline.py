@@ -88,6 +88,22 @@ class BuildPipelineTest(unittest.TestCase):
         self.mmu_bare_identity_build_dir = ROOT / "build" / "mmu_bare_identity_poc"
         self.mmu_missing_rule_build_dir = ROOT / "build" / "mmu_missing_rule"
         self.kmh_v2_vector_mmu_build_dir = ROOT / "build" / "kmh_mmu_layer1_v2_vector_smoke"
+        self.kmh_v2_vector_replay_repro_build_dir = ROOT / "build" / "kmh_mmu_layer1_v2_vector_replay_repro"
+        self.kmh_v2_vector_widths_build_dir = ROOT / "build" / "kmh_mmu_layer1_v2_vector_widths"
+        self.kmh_v2_vector_faults_build_dir = ROOT / "build" / "kmh_mmu_layer1_v2_vector_faults"
+        self.kmh_v2_vector_forms_build_dir = ROOT / "build" / "kmh_mmu_layer1_v2_vector_forms"
+        self.kmh_v2_vector_attr_build_dir = ROOT / "build" / "kmh_mmu_layer1_v2_vector_attr"
+        self.kmh_v2_vector_attr_mmio_build_dir = ROOT / "build" / "kmh_mmu_layer1_v2_vector_attr_mmio"
+        self.kmh_v2_vector_attr_mmio_identity_repro_build_dir = (
+            ROOT / "build" / "kmh_mmu_layer1_v2_vector_attr_mmio_identity_repro"
+        )
+        self.kmh_v2_vector_hyp_build_dir = ROOT / "build" / "kmh_mmu_layer1_v2_vector_hyp"
+        self.kmh_v2_vector_hyp_only_stage1_hit_build_dir = ROOT / "build" / "kmh_mmu_layer1_v2_vector_hyp_only_stage1_hit"
+        self.kmh_v2_vector_hyp_only_stage2_hit_build_dir = ROOT / "build" / "kmh_mmu_layer1_v2_vector_hyp_only_stage2_hit"
+        self.kmh_v2_vector_hyp_only_stage2_gpf_build_dir = ROOT / "build" / "kmh_mmu_layer1_v2_vector_hyp_only_stage2_gpf"
+        self.kmh_v2_vector_hyp_all_stage_hit_build_dir = ROOT / "build" / "kmh_mmu_layer1_v2_vector_hyp_all_stage_hit"
+        self.kmh_v2_vector_hyp_all_stage_s1_fault_build_dir = ROOT / "build" / "kmh_mmu_layer1_v2_vector_hyp_all_stage_s1_fault"
+        self.kmh_v2_vector_hyp_all_stage_s2_gpf_build_dir = ROOT / "build" / "kmh_mmu_layer1_v2_vector_hyp_all_stage_s2_gpf"
         if self.build_dir.exists():
             shutil.rmtree(self.build_dir)
         if self.deferred_check_markers_build_dir.exists():
@@ -164,6 +180,34 @@ class BuildPipelineTest(unittest.TestCase):
             shutil.rmtree(self.mmu_missing_rule_build_dir)
         if self.kmh_v2_vector_mmu_build_dir.exists():
             shutil.rmtree(self.kmh_v2_vector_mmu_build_dir)
+        if self.kmh_v2_vector_replay_repro_build_dir.exists():
+            shutil.rmtree(self.kmh_v2_vector_replay_repro_build_dir)
+        if self.kmh_v2_vector_widths_build_dir.exists():
+            shutil.rmtree(self.kmh_v2_vector_widths_build_dir)
+        if self.kmh_v2_vector_faults_build_dir.exists():
+            shutil.rmtree(self.kmh_v2_vector_faults_build_dir)
+        if self.kmh_v2_vector_forms_build_dir.exists():
+            shutil.rmtree(self.kmh_v2_vector_forms_build_dir)
+        if self.kmh_v2_vector_attr_build_dir.exists():
+            shutil.rmtree(self.kmh_v2_vector_attr_build_dir)
+        if self.kmh_v2_vector_attr_mmio_build_dir.exists():
+            shutil.rmtree(self.kmh_v2_vector_attr_mmio_build_dir)
+        if self.kmh_v2_vector_attr_mmio_identity_repro_build_dir.exists():
+            shutil.rmtree(self.kmh_v2_vector_attr_mmio_identity_repro_build_dir)
+        if self.kmh_v2_vector_hyp_build_dir.exists():
+            shutil.rmtree(self.kmh_v2_vector_hyp_build_dir)
+        if self.kmh_v2_vector_hyp_only_stage1_hit_build_dir.exists():
+            shutil.rmtree(self.kmh_v2_vector_hyp_only_stage1_hit_build_dir)
+        if self.kmh_v2_vector_hyp_only_stage2_hit_build_dir.exists():
+            shutil.rmtree(self.kmh_v2_vector_hyp_only_stage2_hit_build_dir)
+        if self.kmh_v2_vector_hyp_only_stage2_gpf_build_dir.exists():
+            shutil.rmtree(self.kmh_v2_vector_hyp_only_stage2_gpf_build_dir)
+        if self.kmh_v2_vector_hyp_all_stage_hit_build_dir.exists():
+            shutil.rmtree(self.kmh_v2_vector_hyp_all_stage_hit_build_dir)
+        if self.kmh_v2_vector_hyp_all_stage_s1_fault_build_dir.exists():
+            shutil.rmtree(self.kmh_v2_vector_hyp_all_stage_s1_fault_build_dir)
+        if self.kmh_v2_vector_hyp_all_stage_s2_gpf_build_dir.exists():
+            shutil.rmtree(self.kmh_v2_vector_hyp_all_stage_s2_gpf_build_dir)
 
     def test_emitter_generates_harness_in_suite_order(self) -> None:
         emitter = importlib.import_module("generator.xsgen.emitter")
@@ -1154,6 +1198,21 @@ class BuildPipelineTest(unittest.TestCase):
 
         manifest = json.loads(build_manifest.read_text())
         self.assert_manifest_matches_suite_plan(manifest, "suites/kmh_mmu_layer1_v2_vector_smoke.yaml")
+        self.assertIn("vector_mmu", manifest)
+        coverage_path = self.kmh_v2_vector_mmu_build_dir / "vector_mmu_coverage.json"
+        self.assertTrue(coverage_path.is_file())
+        coverage = json.loads(coverage_path.read_text())
+        self.assertEqual(
+            [
+                "v2_vector_smoke_bare_unit_e8_hit",
+                "v2_vector_smoke_sv39_unit_e8_hit",
+                "v2_vector_smoke_sv39_load_page_fault",
+            ],
+            [item["id"] for item in coverage["items"]],
+        )
+        self.assertTrue(all(item["requestor"] == "vector_load" for item in coverage["items"]))
+        self.assertNotIn("cross4k", json.dumps(coverage))
+        self.assertNotIn("perm_fault", json.dumps(coverage))
         self.assertEqual(
             ["init_basic_env", "kmh_v2_vector_mmu_main", "finish_check"],
             manifest["snippet_ids"],
@@ -1171,7 +1230,410 @@ class BuildPipelineTest(unittest.TestCase):
         disasm_text = disasm.read_text()
         self.assertIn("0c0572d7", disasm_text)
         self.assertIn("02050407", disasm_text)
+        self.assertIn("42802557", disasm_text)
+        self.assertIn("3e806457", disasm_text)
+
+        source_text = (ROOT / "snippets" / "programs" / "kmh_v2_vector_mmu_main.c").read_text()
+        smoke_body = source_text[
+            source_text.index("int kmh_v2_vector_mmu_smoke_main"):
+            source_text.index("int kmh_v2_vector_mmu_replay_repro_main")
+        ]
+        self.assertIn("xs_vec_run_smoke()", smoke_body)
+        self.assertNotIn("xs_vec_roundtrip", smoke_body)
+
+    def test_kmh_v2_vector_replay_repro_builds_separate_repro_suite(self) -> None:
+        result = subprocess.run(
+            ["python3", "generator/cli.py", "build", "suites/kmh_mmu_layer1_v2_vector_replay_repro.yaml"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assert_or_skip_for_toolchain(result)
+
+        build_manifest = self.kmh_v2_vector_replay_repro_build_dir / "build_manifest.json"
+        disasm = self.kmh_v2_vector_replay_repro_build_dir / "disasm"
+        generated_suite = self.kmh_v2_vector_replay_repro_build_dir / "generated_suite.c"
+        coverage_path = self.kmh_v2_vector_replay_repro_build_dir / "vector_mmu_coverage.json"
+        self.assertTrue(build_manifest.is_file())
+        self.assertTrue(disasm.is_file())
+        self.assertTrue(generated_suite.is_file())
+        self.assertTrue(coverage_path.is_file())
+
+        manifest = json.loads(build_manifest.read_text())
+        self.assert_manifest_matches_suite_plan(manifest, "suites/kmh_mmu_layer1_v2_vector_replay_repro.yaml")
+        self.assertEqual(
+            ["init_basic_env", "kmh_v2_vector_mmu_replay_repro_main", "finish_check"],
+            manifest["snippet_ids"],
+        )
+        self.assertIn("xsam_program_entry_kmh_v2_vector_mmu_replay_repro_main", generated_suite.read_text())
+
+        coverage = json.loads(coverage_path.read_text())
+        item_ids = {item["id"] for item in coverage["items"]}
+        self.assertIn("v2_vector_repro_sv39_cross4k_valid", item_ids)
+        self.assertIn("v2_vector_repro_sv39_load_perm_fault", item_ids)
+        self.assertIn("v2_vector_repro_sv39_store_perm_fault", item_ids)
+
+        disasm_text = disasm.read_text()
+        self.assertIn("02050407", disasm_text)
         self.assertIn("02058427", disasm_text)
+
+        source_text = (ROOT / "snippets" / "programs" / "kmh_v2_vector_mmu_main.c").read_text()
+        repro_body = source_text[source_text.index("int kmh_v2_vector_mmu_replay_repro_main"):]
+        self.assertIn("xs_vec_run_replay_repro()", repro_body)
+
+    def test_kmh_v2_vector_widths_suite_builds_multi_eew_opcodes(self) -> None:
+        result = subprocess.run(
+            ["python3", "generator/cli.py", "build", "suites/kmh_mmu_layer1_v2_vector_widths.yaml"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assert_or_skip_for_toolchain(result)
+
+        build_manifest = self.kmh_v2_vector_widths_build_dir / "build_manifest.json"
+        disasm = self.kmh_v2_vector_widths_build_dir / "disasm"
+        generated_suite = self.kmh_v2_vector_widths_build_dir / "generated_suite.c"
+        self.assertTrue(build_manifest.is_file())
+        self.assertTrue(disasm.is_file())
+        self.assertTrue(generated_suite.is_file())
+
+        manifest = json.loads(build_manifest.read_text())
+        self.assert_manifest_matches_suite_plan(manifest, "suites/kmh_mmu_layer1_v2_vector_widths.yaml")
+        self.assertIn("vector_mmu", manifest)
+        self.assertTrue((self.kmh_v2_vector_widths_build_dir / "vector_mmu_coverage.json").is_file())
+        self.assertEqual(
+            ["init_basic_env", "kmh_v2_vector_mmu_widths_main", "finish_check"],
+            manifest["snippet_ids"],
+        )
+        self.assertIn("xsam_program_entry_kmh_v2_vector_mmu_widths_main", generated_suite.read_text())
+
+        compile_marches = {
+            flag
+            for command in manifest["commands"]["compile"]
+            for flag in command
+            if flag.startswith("-march=")
+        }
+        self.assertEqual({"-march=rv64gc"}, compile_marches)
+
+        disasm_text = disasm.read_text()
+        for opcode in (
+            "0c8572d7",
+            "0d0572d7",
+            "0d8572d7",
+            "02055407",
+            "02056407",
+            "02057407",
+            "0205d427",
+            "0205e427",
+            "0205f427",
+        ):
+            with self.subTest(opcode=opcode):
+                self.assertIn(opcode, disasm_text)
+
+    def test_kmh_v2_vector_faults_suite_builds_masked_vector_opcodes(self) -> None:
+        result = subprocess.run(
+            ["python3", "generator/cli.py", "build", "suites/kmh_mmu_layer1_v2_vector_faults.yaml"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assert_or_skip_for_toolchain(result)
+
+        build_manifest = self.kmh_v2_vector_faults_build_dir / "build_manifest.json"
+        disasm = self.kmh_v2_vector_faults_build_dir / "disasm"
+        generated_suite = self.kmh_v2_vector_faults_build_dir / "generated_suite.c"
+        self.assertTrue(build_manifest.is_file())
+        self.assertTrue(disasm.is_file())
+        self.assertTrue(generated_suite.is_file())
+
+        manifest = json.loads(build_manifest.read_text())
+        self.assert_manifest_matches_suite_plan(manifest, "suites/kmh_mmu_layer1_v2_vector_faults.yaml")
+        self.assertIn("vector_mmu", manifest)
+        self.assertTrue((self.kmh_v2_vector_faults_build_dir / "vector_mmu_coverage.json").is_file())
+        self.assertEqual(
+            ["init_basic_env", "kmh_v2_vector_mmu_faults_main", "finish_check"],
+            manifest["snippet_ids"],
+        )
+        self.assertIn("xsam_program_entry_kmh_v2_vector_mmu_faults_main", generated_suite.read_text())
+
+        compile_marches = {
+            flag
+            for command in manifest["commands"]["compile"]
+            for flag in command
+            if flag.startswith("-march=")
+        }
+        self.assertEqual({"-march=rv64gc"}, compile_marches)
+
+        disasm_text = disasm.read_text()
+        for opcode in ("02050007", "00050407", "00058427"):
+            with self.subTest(opcode=opcode):
+                self.assertIn(opcode, disasm_text)
+
+    def test_kmh_v2_vector_forms_suite_builds_non_unit_vector_opcodes(self) -> None:
+        result = subprocess.run(
+            ["python3", "generator/cli.py", "build", "suites/kmh_mmu_layer1_v2_vector_forms.yaml"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assert_or_skip_for_toolchain(result)
+
+        manifest = json.loads((self.kmh_v2_vector_forms_build_dir / "build_manifest.json").read_text())
+        self.assert_manifest_matches_suite_plan(manifest, "suites/kmh_mmu_layer1_v2_vector_forms.yaml")
+        self.assertEqual(
+            ["init_basic_env", "kmh_v2_vector_mmu_forms_main", "finish_check"],
+            manifest["snippet_ids"],
+        )
+        self.assertIn("vector_mmu", manifest)
+        self.assertGreaterEqual(len(manifest["vector_mmu"]["coverage"]), 8)
+
+        disasm_text = (self.kmh_v2_vector_forms_build_dir / "disasm").read_text()
+        for opcode in (
+            "0ab50407",
+            "0ab50427",
+            "02050487",
+            "0e950407",
+            "0e950427",
+            "22050407",
+            "22050427",
+            "03050407",
+        ):
+            with self.subTest(opcode=opcode):
+                self.assertIn(opcode, disasm_text)
+        source_text = (ROOT / "snippets/programs/kmh_v2_vector_mmu_forms_main.c").read_text()
+        self.assertIn(
+            "XS_VEC_FORMS_STRIDE_FAULT_VA, (uintptr_t)g_stride_fault_pages, XS_VEC_FORMS_PROT_READ_WRITE",
+            source_text,
+        )
+        self.assertIn(
+            "XS_VEC_FORMS_INDEX_FAULT_VA, (uintptr_t)g_index_fault_pages, XS_VEC_FORMS_PROT_READ_WRITE",
+            source_text,
+        )
+
+    def test_kmh_v2_vector_attr_suite_builds_attribute_coverage_artifact(self) -> None:
+        result = subprocess.run(
+            ["python3", "generator/cli.py", "build", "suites/kmh_mmu_layer1_v2_vector_attr.yaml"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assert_or_skip_for_toolchain(result)
+
+        manifest = json.loads((self.kmh_v2_vector_attr_build_dir / "build_manifest.json").read_text())
+        coverage = json.loads((self.kmh_v2_vector_attr_build_dir / "vector_mmu_coverage.json").read_text())
+        self.assert_manifest_matches_suite_plan(manifest, "suites/kmh_mmu_layer1_v2_vector_attr.yaml")
+        self.assertEqual(
+            {"pmp_deny", "pma_mmio", "pbmt_nc_reserved"},
+            {item["attribute"] for item in manifest["vector_mmu"]["coverage"]},
+        )
+        attr_by_id = {item["id"]: item for item in manifest["vector_mmu"]["coverage"]}
+        self.assertEqual("load_access_fault", attr_by_id["v2_vector_attr_mmio_load"]["fault"])
+        self.assertEqual("vector_mmu_coverage", coverage["kind"])
+        self.assertEqual("generated_not_run", coverage["state"])
+
+        disasm_text = (self.kmh_v2_vector_attr_build_dir / "disasm").read_text()
+        self.assertIn("02057407", disasm_text)
+        self.assertIn("0205f427", disasm_text)
+
+    def test_kmh_v2_vector_attr_mmio_repro_suite_builds_isolated_witness(self) -> None:
+        result = subprocess.run(
+            ["python3", "generator/cli.py", "build", "suites/kmh_mmu_layer1_v2_vector_attr_mmio.yaml"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assert_or_skip_for_toolchain(result)
+
+        manifest = json.loads((self.kmh_v2_vector_attr_mmio_build_dir / "build_manifest.json").read_text())
+        coverage = json.loads((self.kmh_v2_vector_attr_mmio_build_dir / "vector_mmu_coverage.json").read_text())
+        self.assert_manifest_matches_suite_plan(manifest, "suites/kmh_mmu_layer1_v2_vector_attr_mmio.yaml")
+        self.assertEqual(
+            ["init_basic_env", "kmh_v2_vector_mmu_attr_mmio_main", "finish_check"],
+            manifest["snippet_ids"],
+        )
+        self.assertEqual(["v2_vector_attr_mmio_load"], [item["id"] for item in coverage["items"]])
+        self.assertEqual("load_access_fault", coverage["items"][0]["fault"])
+        self.assertEqual("pma_mmio", coverage["items"][0]["attribute"])
+
+        disasm_text = (self.kmh_v2_vector_attr_mmio_build_dir / "disasm").read_text()
+        self.assertIn("02057407", disasm_text)
+        self.assertIn("0205f427", disasm_text)
+
+    def test_kmh_v2_vector_attr_mmio_identity_repro_suite_builds_bug_repro(self) -> None:
+        result = subprocess.run(
+            [
+                "python3",
+                "generator/cli.py",
+                "build",
+                "suites/kmh_mmu_layer1_v2_vector_attr_mmio_identity_repro.yaml",
+            ],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assert_or_skip_for_toolchain(result)
+
+        manifest = json.loads(
+            (self.kmh_v2_vector_attr_mmio_identity_repro_build_dir / "build_manifest.json").read_text()
+        )
+        coverage = json.loads(
+            (self.kmh_v2_vector_attr_mmio_identity_repro_build_dir / "vector_mmu_coverage.json").read_text()
+        )
+        self.assert_manifest_matches_suite_plan(
+            manifest,
+            "suites/kmh_mmu_layer1_v2_vector_attr_mmio_identity_repro.yaml",
+        )
+        self.assertEqual(
+            ["init_basic_env", "kmh_v2_vector_mmu_attr_mmio_identity_repro_main", "finish_check"],
+            manifest["snippet_ids"],
+        )
+        self.assertEqual(
+            ["v2_vector_attr_mmio_identity_store_repro"],
+            [item["id"] for item in coverage["items"]],
+        )
+        self.assertEqual("pma_mmio_identity_store_repro", coverage["items"][0]["attribute"])
+        self.assertEqual("unexpected_fault", coverage["items"][0]["fault"])
+
+        disasm_text = (self.kmh_v2_vector_attr_mmio_identity_repro_build_dir / "disasm").read_text()
+        self.assertIn("02057407", disasm_text)
+        self.assertIn("0205f427", disasm_text)
+
+    def test_kmh_v2_vector_hyp_suite_builds_guest_mode_vector_program(self) -> None:
+        result = subprocess.run(
+            ["python3", "generator/cli.py", "build", "suites/kmh_mmu_layer1_v2_vector_hyp.yaml"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assert_or_skip_for_toolchain(result)
+
+        manifest = json.loads((self.kmh_v2_vector_hyp_build_dir / "build_manifest.json").read_text())
+        self.assert_manifest_matches_suite_plan(manifest, "suites/kmh_mmu_layer1_v2_vector_hyp.yaml")
+        self.assertEqual(
+            {"onlyStage1", "onlyStage2", "allStage"},
+            {item["mode"] for item in manifest["vector_mmu"]["coverage"]},
+        )
+        self.assertEqual(
+            {"load_page_fault", "load_guest_page_fault", "none"},
+            {item["fault"] for item in manifest["vector_mmu"]["coverage"]},
+        )
+
+        disasm_text = (self.kmh_v2_vector_hyp_build_dir / "disasm").read_text()
+        self.assertIn("02050407", disasm_text)
+        self.assertIn("02058427", disasm_text)
+
+    def test_kmh_v2_vector_hyp_only_stage1_suite_builds_isolated_case(self) -> None:
+        result = subprocess.run(
+            ["python3", "generator/cli.py", "build", "suites/kmh_mmu_layer1_v2_vector_hyp_only_stage1_hit.yaml"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assert_or_skip_for_toolchain(result)
+
+        manifest = json.loads((self.kmh_v2_vector_hyp_only_stage1_hit_build_dir / "build_manifest.json").read_text())
+        coverage = json.loads((self.kmh_v2_vector_hyp_only_stage1_hit_build_dir / "vector_mmu_coverage.json").read_text())
+        self.assert_manifest_matches_suite_plan(manifest, "suites/kmh_mmu_layer1_v2_vector_hyp_only_stage1_hit.yaml")
+        self.assertEqual(
+            ["init_basic_env", "kmh_v2_vector_mmu_hyp_only_stage1_hit_main", "finish_check"],
+            manifest["snippet_ids"],
+        )
+        self.assertEqual(["v2_vector_hyp_only_stage1_hit"], [item["id"] for item in coverage["items"]])
+
+        disasm_text = (self.kmh_v2_vector_hyp_only_stage1_hit_build_dir / "disasm").read_text()
+        self.assertIn("02050407", disasm_text)
+        self.assertIn("02058427", disasm_text)
+        source_text = (ROOT / "snippets/programs/kmh_v2_vector_mmu_hyp_main.c").read_text()
+        only_stage1_source = source_text[
+            source_text.index("static int xs_vec_hyp_only_stage1_hit"):
+            source_text.index("static int xs_vec_hyp_only_stage2_hit")
+        ]
+        self.assertIn("xsam_mmu_make_vsatp_pt", only_stage1_source)
+        self.assertIn("xs_vec_hyp_guest_roundtrip", only_stage1_source)
+        self.assertIn("xs_vec_hyp_guest_load_only", only_stage1_source)
+        self.assertNotIn("xsam_mmu_enable_sv39", only_stage1_source)
+        self.assertNotIn("xs_vector_mmu_enter_host_access", only_stage1_source)
+
+    def test_kmh_v2_vector_hyp_stage2_and_allstage_suites_build_isolated_cases(self) -> None:
+        cases = (
+            (
+                "suites/kmh_mmu_layer1_v2_vector_hyp_only_stage2_hit.yaml",
+                self.kmh_v2_vector_hyp_only_stage2_hit_build_dir,
+                "kmh_v2_vector_mmu_hyp_only_stage2_hit_main",
+                "v2_vector_hyp_only_stage2_hit",
+                "onlyStage2",
+                "none",
+                ("02050407", "02058427"),
+            ),
+            (
+                "suites/kmh_mmu_layer1_v2_vector_hyp_only_stage2_gpf.yaml",
+                self.kmh_v2_vector_hyp_only_stage2_gpf_build_dir,
+                "kmh_v2_vector_mmu_hyp_only_stage2_gpf_main",
+                "v2_vector_hyp_only_stage2_gpf",
+                "onlyStage2",
+                "load_guest_page_fault",
+                ("02050407",),
+            ),
+            (
+                "suites/kmh_mmu_layer1_v2_vector_hyp_all_stage_hit.yaml",
+                self.kmh_v2_vector_hyp_all_stage_hit_build_dir,
+                "kmh_v2_vector_mmu_hyp_all_stage_hit_main",
+                "v2_vector_hyp_all_stage_hit",
+                "allStage",
+                "none",
+                ("02050407", "02058427"),
+            ),
+            (
+                "suites/kmh_mmu_layer1_v2_vector_hyp_all_stage_s1_fault.yaml",
+                self.kmh_v2_vector_hyp_all_stage_s1_fault_build_dir,
+                "kmh_v2_vector_mmu_hyp_all_stage_s1_fault_main",
+                "v2_vector_hyp_all_stage_s1_fault",
+                "allStage",
+                "load_page_fault",
+                ("02050407",),
+            ),
+            (
+                "suites/kmh_mmu_layer1_v2_vector_hyp_all_stage_s2_gpf.yaml",
+                self.kmh_v2_vector_hyp_all_stage_s2_gpf_build_dir,
+                "kmh_v2_vector_mmu_hyp_all_stage_s2_gpf_main",
+                "v2_vector_hyp_all_stage_s2_gpf",
+                "allStage",
+                "load_guest_page_fault",
+                ("02050407",),
+            ),
+        )
+
+        for suite_path, build_dir, snippet_id, coverage_id, mode, fault, opcodes in cases:
+            with self.subTest(suite=suite_path):
+                result = subprocess.run(
+                    ["python3", "generator/cli.py", "build", suite_path],
+                    cwd=ROOT,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assert_or_skip_for_toolchain(result)
+
+                manifest = json.loads((build_dir / "build_manifest.json").read_text())
+                coverage = json.loads((build_dir / "vector_mmu_coverage.json").read_text())
+                self.assert_manifest_matches_suite_plan(manifest, suite_path)
+                self.assertEqual(["init_basic_env", snippet_id, "finish_check"], manifest["snippet_ids"])
+                self.assertEqual([coverage_id], [item["id"] for item in coverage["items"]])
+                self.assertEqual(mode, coverage["items"][0]["mode"])
+                self.assertEqual(fault, coverage["items"][0]["fault"])
+
+                disasm_text = (build_dir / "disasm").read_text()
+                for opcode in opcodes:
+                    self.assertIn(opcode, disasm_text)
 
     def test_vsetvl_suite_harness_order_and_final_elf_contains_vsetvl(self) -> None:
         emitter = importlib.import_module("generator.xsgen.emitter")
@@ -1676,6 +2138,45 @@ class BuildPipelineTest(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "No such file or directory|cannot find"):
             toolchain.build_artifacts(ROOT, plan, artifact)
+
+    def test_vector_coverage_artifact_is_removed_after_compile_failure(self) -> None:
+        emitter = importlib.import_module("generator.xsgen.emitter")
+        model = importlib.import_module("generator.xsgen.model")
+        toolchain = importlib.import_module("generator.xsgen.toolchain")
+
+        missing_source = ROOT / "snippets" / "scalar_load_legality" / "does_not_exist.c"
+        snippet = model.SnippetSpec(
+            id="missing_vector_source_snippet",
+            kind="proc",
+            lang="c",
+            sources=(missing_source,),
+        )
+        plan = model.ComposePlan(
+            suite_name="missing_vector_source_case",
+            target="xiangshan-verilator",
+            seed=2,
+            snippet_ids=("missing_vector_source_snippet",),
+            snippets=(snippet,),
+            vector_mmu_coverage=(
+                {
+                    "id": "v2_vector_widths_e8_unit_hit",
+                    "requestor": "vector_load_store",
+                    "mode": "host_single_stage",
+                    "form": "unit_stride",
+                    "eew": "e8",
+                    "page_boundary": "single_page",
+                    "fault": "none",
+                    "attribute": "normal",
+                    "fail_codes": "22",
+                },
+            ),
+        )
+        artifact = toolchain.artifact_paths_for_suite(ROOT, plan.suite_name)
+        emitter.emit_harness(plan, artifact.generated_suite_path)
+
+        with self.assertRaisesRegex(RuntimeError, "No such file or directory|cannot find"):
+            toolchain.build_artifacts(ROOT, plan, artifact)
+        self.assertFalse(artifact.vector_mmu_coverage_path.exists())
 
     def test_objcopy_failure_is_reported(self) -> None:
         snippet_db = importlib.import_module("generator.xsgen.snippet_db")

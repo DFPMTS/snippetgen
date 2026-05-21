@@ -102,24 +102,125 @@ class KMHMMULayer1InventoryTest(unittest.TestCase):
         self.assertLessEqual({"mode.onlyStage1", "mode.onlyStage2", "mode.allStage"}, set(plans["full"].mmu_coverage_tags))
         self.assertIn("retry.repair_then_reexecute", plans["full"].mmu_coverage_tags)
 
-        vector_plan = build_compose_plan(
-            load_suite(ROOT / "suites" / "kmh_mmu_layer1_v2_vector_smoke.yaml"),
-            snippet_db,
-        )
-        self.assertEqual(
-            ("init_basic_env", "kmh_v2_vector_mmu_main", "finish_check"),
-            vector_plan.snippet_ids,
-        )
-        self.assertEqual((), vector_plan.mmu_rule_ids)
-        self.assertEqual((), vector_plan.mmu_coverage_tags)
+        vector_suites = {
+            "vector_smoke": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_smoke.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_main", "finish_check"),
+                {"unit_stride"},
+            ),
+            "vector_replay_repro": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_replay_repro.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_replay_repro_main", "finish_check"),
+                {"unit_stride"},
+            ),
+            "vector_widths": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_widths.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_widths_main", "finish_check"),
+                {"unit_stride"},
+            ),
+            "vector_faults": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_faults.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_faults_main", "finish_check"),
+                {"masked_unit_stride", "unit_stride"},
+            ),
+            "vector_forms": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_forms.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_forms_main", "finish_check"),
+                {"strided", "indexed_ordered", "segment2", "fault_only_first", "unit_stride_vstart"},
+            ),
+            "vector_attr": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_attr.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_attr_main", "finish_check"),
+                {"unit_stride"},
+            ),
+            "vector_attr_pmp_load": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_attr_pmp_load.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_attr_pmp_load_main", "finish_check"),
+                {"unit_stride"},
+            ),
+            "vector_attr_pmp_store": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_attr_pmp_store.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_attr_pmp_store_main", "finish_check"),
+                {"unit_stride"},
+            ),
+            "vector_attr_mmio": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_attr_mmio.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_attr_mmio_main", "finish_check"),
+                {"unit_stride"},
+            ),
+            "vector_attr_mmio_identity_repro": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_attr_mmio_identity_repro.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_attr_mmio_identity_repro_main", "finish_check"),
+                {"unit_stride"},
+            ),
+            "vector_attr_pbmt": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_attr_pbmt.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_attr_pbmt_main", "finish_check"),
+                {"unit_stride"},
+            ),
+            "vector_hyp": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_hyp.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_hyp_main", "finish_check"),
+                {"unit_stride"},
+            ),
+            "vector_hyp_only_stage1_hit": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_hyp_only_stage1_hit.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_hyp_only_stage1_hit_main", "finish_check"),
+                {"unit_stride"},
+            ),
+            "vector_hyp_only_stage1_fault": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_hyp_only_stage1_fault.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_hyp_only_stage1_fault_main", "finish_check"),
+                {"unit_stride"},
+            ),
+            "vector_hyp_only_stage2_hit": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_hyp_only_stage2_hit.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_hyp_only_stage2_hit_main", "finish_check"),
+                {"unit_stride"},
+            ),
+            "vector_hyp_only_stage2_gpf": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_hyp_only_stage2_gpf.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_hyp_only_stage2_gpf_main", "finish_check"),
+                {"unit_stride"},
+            ),
+            "vector_hyp_all_stage_hit": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_hyp_all_stage_hit.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_hyp_all_stage_hit_main", "finish_check"),
+                {"unit_stride"},
+            ),
+            "vector_hyp_all_stage_s1_fault": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_hyp_all_stage_s1_fault.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_hyp_all_stage_s1_fault_main", "finish_check"),
+                {"unit_stride"},
+            ),
+            "vector_hyp_all_stage_s2_gpf": (
+                ROOT / "suites" / "kmh_mmu_layer1_v2_vector_hyp_all_stage_s2_gpf.yaml",
+                ("init_basic_env", "kmh_v2_vector_mmu_hyp_all_stage_s2_gpf_main", "finish_check"),
+                {"unit_stride"},
+            ),
+        }
+        for suite_name, (suite_path, expected_snippets, expected_forms) in vector_suites.items():
+            with self.subTest(vector_suite=suite_name):
+                vector_plan = build_compose_plan(load_suite(suite_path), snippet_db)
+                self.assertEqual(expected_snippets, vector_plan.snippet_ids)
+                self.assertEqual((), vector_plan.mmu_rule_ids)
+                self.assertEqual((), vector_plan.mmu_coverage_tags)
+                self.assertGreater(len(vector_plan.vector_mmu_coverage), 0)
+                self.assertLessEqual(expected_forms, {item["form"] for item in vector_plan.vector_mmu_coverage})
 
         for suite_name in ("v3", "full"):
             with self.subTest(vector_free_suite=suite_name):
                 self.assertNotIn("kmh_v2_vector_mmu_main", plans[suite_name].snippet_ids)
+                self.assertNotIn("kmh_v2_vector_mmu_widths_main", plans[suite_name].snippet_ids)
+                self.assertNotIn("kmh_v2_vector_mmu_faults_main", plans[suite_name].snippet_ids)
+                self.assertNotIn("kmh_v2_vector_mmu_forms_main", plans[suite_name].snippet_ids)
+                self.assertNotIn("kmh_v2_vector_mmu_attr_main", plans[suite_name].snippet_ids)
+                self.assertNotIn("kmh_v2_vector_mmu_hyp_main", plans[suite_name].snippet_ids)
+                self.assertNotIn("kmh_v2_vector_mmu_replay_repro_main", plans[suite_name].snippet_ids)
 
         for suite_name in ("v3", "full", "v2"):
             with self.subTest(replay_debug_free_suite=suite_name):
-                self.assertFalse(any("vector_replay" in snippet_id for snippet_id in plans[suite_name].snippet_ids))
+                self.assertFalse(any("replay_repro" in snippet_id for snippet_id in plans[suite_name].snippet_ids))
 
     def test_permission_fault_rules_are_observable_and_suite_selected(self) -> None:
         import yaml
@@ -270,6 +371,37 @@ class KMHMMULayer1InventoryTest(unittest.TestCase):
 
         self.assertNotEqual(mapping["va"], mapping["pa"])
         self.assertNotIn("page.identity", rule["coverage_tags"])
+
+    def test_vector_smoke_keeps_no_fence_roundtrip_in_repro_only(self) -> None:
+        source = (ROOT / "snippets" / "programs" / "kmh_v2_vector_mmu_main.c").read_text()
+        smoke_impl = source[
+            source.index("static int xs_vec_run_smoke"):
+            source.index("static int xs_vec_run_replay_repro")
+        ]
+        repro_impl = source[
+            source.index("static int xs_vec_run_replay_repro"):
+            source.index("int kmh_v2_vector_mmu_smoke_main")
+        ]
+
+        self.assertIn("xs_vec_bare_load_hit", smoke_impl)
+        self.assertIn("xs_vec_sv39_load_hit", smoke_impl)
+        self.assertNotIn("xs_vec_bare_hit", smoke_impl)
+        self.assertNotIn("xs_vec_sv39_hit", smoke_impl)
+        self.assertNotIn("xs_vec_cross_4k_hit", smoke_impl)
+        self.assertIn("xs_vec_bare_hit", repro_impl)
+        self.assertIn("xs_vec_sv39_hit", repro_impl)
+        self.assertIn("xs_vec_cross_4k_hit", repro_impl)
+
+    def test_vector_smoke_load_path_validates_every_loaded_lane(self) -> None:
+        source = (ROOT / "snippets" / "programs" / "kmh_v2_vector_mmu_main.c").read_text()
+        load_only_impl = source[
+            source.index("static int xs_vec_load_only"):
+            source.index("static int xs_vec_map_page")
+        ]
+
+        self.assertIn("for (index = 0u; index < len; ++index)", load_only_impl)
+        self.assertIn("xs_vector_mmu_vslide1down_v8", load_only_impl)
+        self.assertIn("expected[index]", load_only_impl)
 
     def test_context_switch_rules_depend_on_switched_page_table_roots(self) -> None:
         import yaml

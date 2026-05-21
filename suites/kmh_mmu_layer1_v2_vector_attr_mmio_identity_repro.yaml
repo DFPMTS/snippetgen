@@ -1,0 +1,19 @@
+suite: kmh_mmu_layer1_v2_vector_attr_mmio_identity_repro
+target: xiangshan-verilator
+seed: 241027
+compose:
+  mode: sequence
+  snippets:
+    - init_basic_env
+    - kmh_v2_vector_mmu_attr_mmio_identity_repro_main
+    - finish_check
+  vector_mmu_coverage:
+    - id: v2_vector_attr_mmio_identity_store_repro
+      requestor: vector_load_store
+      mode: host_single_stage
+      form: unit_stride
+      eew: e64
+      page_boundary: single_page
+      fault: unexpected_fault
+      attribute: pma_mmio_identity_store_repro
+      fail_codes: "54"

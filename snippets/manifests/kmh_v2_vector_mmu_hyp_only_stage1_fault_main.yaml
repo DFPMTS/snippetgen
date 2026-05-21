@@ -1,0 +1,6 @@
+id: kmh_v2_vector_mmu_hyp_only_stage1_fault_main
+kind: am_program
+lang: c
+entry: kmh_v2_vector_mmu_hyp_only_stage1_fault_main
+sources:
+  - snippets/programs/kmh_v2_vector_mmu_hyp_main.c

@@ -1,0 +1,82 @@
+suite: kmh_mmu_layer1_v2_vector_forms
+target: xiangshan-verilator
+seed: 241027
+compose:
+  mode: sequence
+  snippets:
+    - init_basic_env
+    - kmh_v2_vector_mmu_forms_main
+    - finish_check
+  vector_mmu_coverage:
+    - id: v2_vector_forms_strided_hit
+      requestor: vector_load_store
+      mode: host_single_stage
+      form: strided
+      eew: e8
+      page_boundary: single_page
+      fault: none
+      attribute: normal
+      fail_codes: "42"
+    - id: v2_vector_forms_strided_fault
+      requestor: vector_load_store
+      mode: host_single_stage
+      form: strided
+      eew: e8
+      page_boundary: cross_4k_invalid_second
+      fault: page_fault
+      attribute: normal
+      fail_codes: "43"
+    - id: v2_vector_forms_indexed_hit
+      requestor: vector_load_store
+      mode: host_single_stage
+      form: indexed_ordered
+      eew: e8
+      page_boundary: single_page
+      fault: none
+      attribute: normal
+      fail_codes: "44"
+    - id: v2_vector_forms_indexed_fault
+      requestor: vector_load_store
+      mode: host_single_stage
+      form: indexed_ordered
+      eew: e8
+      page_boundary: cross_4k_invalid_second
+      fault: page_fault
+      attribute: normal
+      fail_codes: "45"
+    - id: v2_vector_forms_segment_hit
+      requestor: vector_load_store
+      mode: host_single_stage
+      form: segment2
+      eew: e8
+      page_boundary: single_page
+      fault: none
+      attribute: normal
+      fail_codes: "46"
+    - id: v2_vector_forms_fof_later_fault
+      requestor: vector_load
+      mode: host_single_stage
+      form: fault_only_first
+      eew: e8
+      page_boundary: cross_4k_invalid_second
+      fault: none
+      attribute: normal
+      fail_codes: "47"
+    - id: v2_vector_forms_fof_first_fault
+      requestor: vector_load
+      mode: host_single_stage
+      form: fault_only_first
+      eew: e8
+      page_boundary: first_element_invalid
+      fault: load_page_fault
+      attribute: normal
+      fail_codes: "48"
+    - id: v2_vector_forms_vstart_store
+      requestor: vector_store
+      mode: host_single_stage
+      form: unit_stride_vstart
+      eew: e8
+      page_boundary: single_page
+      fault: none
+      attribute: normal
+      fail_codes: "49"

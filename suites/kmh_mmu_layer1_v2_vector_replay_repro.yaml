@@ -1,0 +1,73 @@
+suite: kmh_mmu_layer1_v2_vector_replay_repro
+target: xiangshan-verilator
+seed: 241027
+compose:
+  mode: sequence
+  snippets:
+    - init_basic_env
+    - kmh_v2_vector_mmu_replay_repro_main
+    - finish_check
+  vector_mmu_coverage:
+    - id: v2_vector_repro_bare_unit_e8_hit
+      requestor: vector_load_store
+      mode: bare
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: none
+      attribute: normal
+      fail_codes: "11"
+    - id: v2_vector_repro_sv39_unit_e8_hit
+      requestor: vector_load_store
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: none
+      attribute: normal
+      fail_codes: "13"
+    - id: v2_vector_repro_sv39_cross4k_valid
+      requestor: vector_load_store
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: cross_4k_valid
+      fault: none
+      attribute: normal
+      fail_codes: "14"
+    - id: v2_vector_repro_sv39_load_page_fault
+      requestor: vector_load
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: load_page_fault
+      attribute: normal
+      fail_codes: "15"
+    - id: v2_vector_repro_sv39_store_page_fault
+      requestor: vector_store
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: store_page_fault
+      attribute: normal
+      fail_codes: "16"
+    - id: v2_vector_repro_sv39_load_perm_fault
+      requestor: vector_load
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: load_page_fault
+      attribute: pte_no_read
+      fail_codes: "17"
+    - id: v2_vector_repro_sv39_store_perm_fault
+      requestor: vector_store
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: store_page_fault
+      attribute: pte_no_write
+      fail_codes: "18"

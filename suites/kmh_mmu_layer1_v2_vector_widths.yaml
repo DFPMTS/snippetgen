@@ -1,0 +1,46 @@
+suite: kmh_mmu_layer1_v2_vector_widths
+target: xiangshan-verilator
+seed: 241027
+compose:
+  mode: sequence
+  snippets:
+    - init_basic_env
+    - kmh_v2_vector_mmu_widths_main
+    - finish_check
+  vector_mmu_coverage:
+    - id: v2_vector_widths_e8_unit_hit
+      requestor: vector_load_store
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: none
+      attribute: normal
+      fail_codes: "22"
+    - id: v2_vector_widths_e16_unit_hit
+      requestor: vector_load_store
+      mode: host_single_stage
+      form: unit_stride
+      eew: e16
+      page_boundary: single_page
+      fault: none
+      attribute: normal
+      fail_codes: "23"
+    - id: v2_vector_widths_e32_unit_hit
+      requestor: vector_load_store
+      mode: host_single_stage
+      form: unit_stride
+      eew: e32
+      page_boundary: single_page
+      fault: none
+      attribute: normal
+      fail_codes: "24"
+    - id: v2_vector_widths_e64_unit_hit
+      requestor: vector_load_store
+      mode: host_single_stage
+      form: unit_stride
+      eew: e64
+      page_boundary: single_page
+      fault: none
+      attribute: normal
+      fail_codes: "25"

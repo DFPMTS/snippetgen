@@ -1,0 +1,19 @@
+suite: kmh_mmu_layer1_v2_vector_hyp_only_stage1_fault
+target: xiangshan-verilator
+seed: 241027
+compose:
+  mode: sequence
+  snippets:
+    - init_basic_env
+    - kmh_v2_vector_mmu_hyp_only_stage1_fault_main
+    - finish_check
+  vector_mmu_coverage:
+    - id: v2_vector_hyp_only_stage1_fault
+      requestor: vector_load
+      mode: onlyStage1
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: load_page_fault
+      attribute: normal
+      fail_codes: "62"

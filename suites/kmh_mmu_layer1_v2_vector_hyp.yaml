@@ -1,0 +1,73 @@
+suite: kmh_mmu_layer1_v2_vector_hyp
+target: xiangshan-verilator
+seed: 241027
+compose:
+  mode: sequence
+  snippets:
+    - init_basic_env
+    - kmh_v2_vector_mmu_hyp_main
+    - finish_check
+  vector_mmu_coverage:
+    - id: v2_vector_hyp_only_stage1_hit
+      requestor: vector_load_store
+      mode: onlyStage1
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: none
+      attribute: normal
+      fail_codes: "61"
+    - id: v2_vector_hyp_only_stage1_fault
+      requestor: vector_load
+      mode: onlyStage1
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: load_page_fault
+      attribute: normal
+      fail_codes: "62"
+    - id: v2_vector_hyp_only_stage2_hit
+      requestor: vector_load_store
+      mode: onlyStage2
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: none
+      attribute: normal
+      fail_codes: "63"
+    - id: v2_vector_hyp_only_stage2_gpf
+      requestor: vector_load
+      mode: onlyStage2
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: load_guest_page_fault
+      attribute: normal
+      fail_codes: "64"
+    - id: v2_vector_hyp_all_stage_hit
+      requestor: vector_load_store
+      mode: allStage
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: none
+      attribute: normal
+      fail_codes: "65"
+    - id: v2_vector_hyp_all_stage_s1_fault
+      requestor: vector_load
+      mode: allStage
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: load_page_fault
+      attribute: normal
+      fail_codes: "66"
+    - id: v2_vector_hyp_all_stage_s2_gpf
+      requestor: vector_load
+      mode: allStage
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: load_guest_page_fault
+      attribute: normal
+      fail_codes: "67"

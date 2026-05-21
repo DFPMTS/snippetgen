@@ -99,12 +99,42 @@ static int xs_vec_roundtrip(
   }
   xs_vector_mmu_vle8_v8_direct((const void *)load_addr);
   xs_vector_mmu_vse8_v8_direct((void *)store_addr);
-  xs_vector_mmu_fence();
   match = xs_vec_mem_eq(expected, observed, len);
   if (translated != 0) {
     xs_vector_mmu_leave_host_access(saved_status);
   }
   return match ? 0 : -1;
+}
+
+static int xs_vec_load_only(
+    uintptr_t load_addr,
+    const uint8_t *expected,
+    size_t len,
+    int translated) {
+  uintptr_t saved_status;
+  size_t index;
+
+  saved_status = 0u;
+  if (xs_vector_mmu_set_vl_e8_m1(len) != len) {
+    return -1;
+  }
+  if (translated != 0) {
+    saved_status = xs_vector_mmu_enter_host_access();
+  }
+  xs_vector_mmu_vle8_v8_direct((const void *)load_addr);
+  for (index = 0u; index < len; ++index) {
+    if (xs_vector_mmu_vmv_x_s_v8_u8() != expected[index]) {
+      if (translated != 0) {
+        xs_vector_mmu_leave_host_access(saved_status);
+      }
+      return -1;
+    }
+    xs_vector_mmu_vslide1down_v8();
+  }
+  if (translated != 0) {
+    xs_vector_mmu_leave_host_access(saved_status);
+  }
+  return 0;
 }
 
 static int xs_vec_map_page(
@@ -162,6 +192,16 @@ static int xs_vec_bare_hit(void) {
       0);
 }
 
+static int xs_vec_bare_load_hit(void) {
+  xsam_mmu_enable_bare();
+  xs_vec_fill(g_bare_src, 0u, XS_VEC_SINGLE_LEN, 0x21u);
+  return xs_vec_load_only(
+      (uintptr_t)g_bare_src,
+      g_bare_src,
+      XS_VEC_SINGLE_LEN,
+      0);
+}
+
 static int xs_vec_sv39_hit(void) {
   xs_vec_fill(g_sv39_src, 0u, XS_VEC_SINGLE_LEN, 0x41u);
   xs_vec_zero(g_sv39_dst, 0u, XS_VEC_SINGLE_LEN);
@@ -170,6 +210,15 @@ static int xs_vec_sv39_hit(void) {
       XS_VEC_SV39_DST_VA,
       g_sv39_src,
       g_sv39_dst,
+      XS_VEC_SINGLE_LEN,
+      1);
+}
+
+static int xs_vec_sv39_load_hit(void) {
+  xs_vec_fill(g_sv39_src, 0u, XS_VEC_SINGLE_LEN, 0x41u);
+  return xs_vec_load_only(
+      XS_VEC_SV39_SRC_VA,
+      g_sv39_src,
       XS_VEC_SINGLE_LEN,
       1);
 }
@@ -199,7 +248,6 @@ static int xs_vec_expect_fault(uint32_t mask, uintptr_t cause, uintptr_t addr, i
   } else {
     xs_vector_mmu_vle8_v8_direct((const void *)addr);
   }
-  xs_vector_mmu_fence();
   xs_vector_mmu_leave_host_access(saved_status);
   if (xsam_mmu_fault_assert(mask) != 0) {
     return -1;
@@ -210,13 +258,23 @@ static int xs_vec_expect_fault(uint32_t mask, uintptr_t cause, uintptr_t addr, i
   return 0;
 }
 
-static int xs_vec_faults(void) {
+static int xs_vec_basic_fault(void) {
   if (xs_vec_expect_fault(
           XSAM_MMU_FAULT_LOAD_PAGE,
           XSAM_MMU_CAUSE_LOAD_PAGE_FAULT,
           XS_VEC_LOAD_PAGE_FAULT_VA,
           0) != 0) {
     return XS_VEC_FAIL_LOAD_PAGE_FAULT;
+  }
+  return 0;
+}
+
+static int xs_vec_faults(void) {
+  int rc;
+
+  rc = xs_vec_basic_fault();
+  if (rc != 0) {
+    return rc;
   }
   if (xs_vec_expect_fault(
           XSAM_MMU_FAULT_STORE_PAGE,
@@ -242,9 +300,7 @@ static int xs_vec_faults(void) {
   return 0;
 }
 
-int main(void) {
-  int rc;
-
+static int xs_vec_common_setup(void) {
   xsam_xs_pmp_init();
   xs_vector_mmu_enable_vector_state();
   if (xs_vector_mmu_set_vl_e8_m1(1u) != 1u) {
@@ -252,6 +308,40 @@ int main(void) {
   }
 
   xsam_mmu_fault_install_handlers();
+  return 0;
+}
+
+static int xs_vec_run_smoke(void) {
+  int rc;
+
+  rc = xs_vec_common_setup();
+  if (rc != 0) {
+    return rc;
+  }
+  if (xs_vec_bare_load_hit() != 0) {
+    return XS_VEC_FAIL_BARE_HIT;
+  }
+  if (xs_vec_setup_sv39() != 0) {
+    xsam_mmu_enable_bare();
+    return XS_VEC_FAIL_SV39_SETUP;
+  }
+  if (xs_vec_sv39_load_hit() != 0) {
+    xsam_mmu_enable_bare();
+    return XS_VEC_FAIL_SV39_HIT;
+  }
+
+  rc = xs_vec_basic_fault();
+  xsam_mmu_enable_bare();
+  return rc;
+}
+
+static int xs_vec_run_replay_repro(void) {
+  int rc;
+
+  rc = xs_vec_common_setup();
+  if (rc != 0) {
+    return rc;
+  }
   if (xs_vec_bare_hit() != 0) {
     return XS_VEC_FAIL_BARE_HIT;
   }
@@ -271,4 +361,12 @@ int main(void) {
   rc = xs_vec_faults();
   xsam_mmu_enable_bare();
   return rc;
+}
+
+int kmh_v2_vector_mmu_smoke_main(void) {
+  return xs_vec_run_smoke();
+}
+
+int kmh_v2_vector_mmu_replay_repro_main(void) {
+  return xs_vec_run_replay_repro();
 }

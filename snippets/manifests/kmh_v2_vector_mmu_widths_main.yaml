@@ -1,0 +1,6 @@
+id: kmh_v2_vector_mmu_widths_main
+kind: am_program
+lang: c
+entry: main
+sources:
+  - snippets/programs/kmh_v2_vector_mmu_widths_main.c

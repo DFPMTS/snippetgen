@@ -1,0 +1,6 @@
+id: kmh_v2_vector_mmu_hyp_all_stage_hit_main
+kind: am_program
+lang: c
+entry: kmh_v2_vector_mmu_hyp_all_stage_hit_main
+sources:
+  - snippets/programs/kmh_v2_vector_mmu_hyp_main.c

@@ -1,0 +1,46 @@
+suite: kmh_mmu_layer1_v2_vector_attr
+target: xiangshan-verilator
+seed: 241027
+compose:
+  mode: sequence
+  snippets:
+    - init_basic_env
+    - kmh_v2_vector_mmu_attr_main
+    - finish_check
+  vector_mmu_coverage:
+    - id: v2_vector_attr_pmp_load_deny
+      requestor: vector_load
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: load_access_fault
+      attribute: pmp_deny
+      fail_codes: "52"
+    - id: v2_vector_attr_pmp_store_deny
+      requestor: vector_store
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: store_access_fault
+      attribute: pmp_deny
+      fail_codes: "53"
+    - id: v2_vector_attr_mmio_load
+      requestor: vector_load
+      mode: host_single_stage
+      form: unit_stride
+      eew: e64
+      page_boundary: single_page
+      fault: load_access_fault
+      attribute: pma_mmio
+      fail_codes: "54"
+    - id: v2_vector_attr_pbmt_nc_reserved
+      requestor: vector_load
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: load_page_fault
+      attribute: pbmt_nc_reserved
+      fail_codes: "55"

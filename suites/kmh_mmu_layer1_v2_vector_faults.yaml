@@ -1,0 +1,64 @@
+suite: kmh_mmu_layer1_v2_vector_faults
+target: xiangshan-verilator
+seed: 241027
+compose:
+  mode: sequence
+  snippets:
+    - init_basic_env
+    - kmh_v2_vector_mmu_faults_main
+    - finish_check
+  vector_mmu_coverage:
+    - id: v2_vector_faults_cross_invalid_load
+      requestor: vector_load
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: cross_4k_invalid_second
+      fault: load_page_fault
+      attribute: normal
+      fail_codes: "32"
+    - id: v2_vector_faults_cross_invalid_store
+      requestor: vector_store
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: cross_4k_invalid_second
+      fault: store_page_fault
+      attribute: normal
+      fail_codes: "33"
+    - id: v2_vector_faults_cross_no_perm_load
+      requestor: vector_load
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: cross_4k_no_perm_second
+      fault: load_page_fault
+      attribute: normal
+      fail_codes: "38"
+    - id: v2_vector_faults_cross_no_perm_store
+      requestor: vector_store
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: cross_4k_no_perm_second
+      fault: store_page_fault
+      attribute: normal
+      fail_codes: "39"
+    - id: v2_vector_faults_masked_off_suppression
+      requestor: vector_load_store
+      mode: host_single_stage
+      form: masked_unit_stride
+      eew: e8
+      page_boundary: cross_4k_masked_off_second
+      fault: none
+      attribute: normal
+      fail_codes: "34,35"
+    - id: v2_vector_faults_masked_on_trigger
+      requestor: vector_load_store
+      mode: host_single_stage
+      form: masked_unit_stride
+      eew: e8
+      page_boundary: cross_4k_masked_on_second
+      fault: page_fault
+      attribute: normal
+      fail_codes: "36,37"

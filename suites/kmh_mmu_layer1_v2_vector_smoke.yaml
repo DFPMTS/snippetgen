@@ -7,3 +7,31 @@ compose:
     - init_basic_env
     - kmh_v2_vector_mmu_main
     - finish_check
+  vector_mmu_coverage:
+    - id: v2_vector_smoke_bare_unit_e8_hit
+      requestor: vector_load
+      mode: bare
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: none
+      attribute: normal
+      fail_codes: "11"
+    - id: v2_vector_smoke_sv39_unit_e8_hit
+      requestor: vector_load
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: none
+      attribute: normal
+      fail_codes: "13"
+    - id: v2_vector_smoke_sv39_load_page_fault
+      requestor: vector_load
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: load_page_fault
+      attribute: normal
+      fail_codes: "15"

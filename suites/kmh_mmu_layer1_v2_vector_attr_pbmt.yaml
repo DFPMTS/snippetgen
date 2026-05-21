@@ -1,0 +1,19 @@
+suite: kmh_mmu_layer1_v2_vector_attr_pbmt
+target: xiangshan-verilator
+seed: 241027
+compose:
+  mode: sequence
+  snippets:
+    - init_basic_env
+    - kmh_v2_vector_mmu_attr_pbmt_main
+    - finish_check
+  vector_mmu_coverage:
+    - id: v2_vector_attr_pbmt_nc_reserved
+      requestor: vector_load
+      mode: host_single_stage
+      form: unit_stride
+      eew: e8
+      page_boundary: single_page
+      fault: load_page_fault
+      attribute: pbmt_nc_reserved
+      fail_codes: "55"
