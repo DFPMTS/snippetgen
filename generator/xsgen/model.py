@@ -26,6 +26,7 @@ class SuiteSpec:
     mmu_rule_ids: tuple[str, ...] = ()
     mmu_defined_rule_ids: tuple[str, ...] = ()
     mmu_coverage_tags: tuple[str, ...] = ()
+    vector_mmu_coverage: tuple[dict[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,7 @@ class ComposePlan:
     mmu_rule_ids: tuple[str, ...] = ()
     mmu_defined_rule_ids: tuple[str, ...] = ()
     mmu_coverage_tags: tuple[str, ...] = ()
+    vector_mmu_coverage: tuple[dict[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,7 @@ class BuildArtifact:
     generated_mmu_header_path: Path | None = None
     generated_mmu_source_path: Path | None = None
     mmu_coverage_ledger_path: Path | None = None
+    vector_mmu_coverage_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +108,7 @@ class RunEntry:
     returncode: int | None = None
     finish_code: int | None = None
     mmu_coverage_ledger_path: Path | None = None
+    vector_mmu_coverage_path: Path | None = None
     runner_profile: str | None = None
     runner_revision: str | None = None
     diff_revision: str | None = None

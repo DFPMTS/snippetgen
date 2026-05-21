@@ -68,6 +68,7 @@ def cmd_dump_plan(args: argparse.Namespace) -> int:
             "generated_mmu_header": str(artifact.generated_mmu_header_path),
             "generated_mmu_source": str(artifact.generated_mmu_source_path),
             "mmu_coverage_ledger": str(artifact.mmu_coverage_ledger_path),
+            "vector_mmu_coverage": str(artifact.vector_mmu_coverage_path),
         },
     }
     if plan.mmu_rule_dir is not None and plan.mmu_rule_ids:
@@ -76,6 +77,10 @@ def cmd_dump_plan(args: argparse.Namespace) -> int:
             "resolved_rule_ids": list(plan.mmu_rule_ids),
             "defined_rule_ids": list(plan.mmu_defined_rule_ids),
             "coverage_tags": list(plan.mmu_coverage_tags),
+        }
+    if plan.vector_mmu_coverage:
+        payload["vector_mmu"] = {
+            "coverage": [dict(item) for item in plan.vector_mmu_coverage],
         }
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0

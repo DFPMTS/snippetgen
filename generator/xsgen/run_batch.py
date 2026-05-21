@@ -122,6 +122,11 @@ def _entry_payload(entry: RunEntry) -> dict:
             if entry.mmu_coverage_ledger_path is not None
             else None
         ),
+        "vector_mmu_coverage": (
+            str(entry.vector_mmu_coverage_path)
+            if entry.vector_mmu_coverage_path is not None
+            else None
+        ),
     }
 
 
@@ -152,6 +157,86 @@ def _mmu_ran_rule_ids(
     return prepared.plan.mmu_rule_ids[:partial_count]
 
 
+def _vector_failed_item_index(
+    *,
+    prepared: _PreparedSeedRun,
+    target_result: TargetRunResult,
+) -> int | None:
+    if not prepared.plan.vector_mmu_coverage:
+        return None
+    if target_result.finish_code == 0 or "good_trap" in target_result.labels:
+        return None
+    if target_result.finish_code is None:
+        return None
+
+    for index, item in enumerate(prepared.plan.vector_mmu_coverage):
+        fail_codes = {
+            int(code)
+            for code in item.get("fail_codes", "").split(",")
+            if code.strip()
+        }
+        if target_result.finish_code in fail_codes:
+            return index
+    return None
+
+
+def _vector_setup_unrun_start_index(
+    *,
+    prepared: _PreparedSeedRun,
+    target_result: TargetRunResult,
+) -> int | None:
+    if target_result.finish_code is None:
+        return None
+    if not target_result.notes.startswith("Unknown trap code:"):
+        return None
+
+    for index, item in enumerate(prepared.plan.vector_mmu_coverage):
+        fail_codes = [
+            int(code)
+            for code in item.get("fail_codes", "").split(",")
+            if code.strip()
+        ]
+        if fail_codes and target_result.finish_code < min(fail_codes):
+            return index
+    return None
+
+
+def _mark_vector_mmu_coverage(
+    coverage_path: Path,
+    *,
+    failed_item_index: int | None,
+    setup_unrun_start_index: int | None,
+    target_result: TargetRunResult,
+) -> None:
+    if not coverage_path.is_file():
+        return
+    payload = json.loads(coverage_path.read_text())
+    semantic_success = (
+        target_result.finish_code == 0
+        or "good_trap" in target_result.labels
+    )
+    target_ran = "ran" in target_result.labels or "timeout" in target_result.labels
+    if not semantic_success and not target_ran:
+        return
+    state = "ran" if semantic_success else "failed_or_blocked"
+    payload["state"] = state
+    items = payload.get("items", [])
+    for index, item in enumerate(items):
+        if isinstance(item, dict):
+            if failed_item_index is not None and 0 <= failed_item_index < len(items):
+                if index < failed_item_index:
+                    item["state"] = "ran"
+                elif index == failed_item_index:
+                    item["state"] = "failed_or_blocked"
+                else:
+                    item["state"] = "generated_not_run"
+            elif setup_unrun_start_index is not None and 0 <= setup_unrun_start_index < len(items):
+                item["state"] = "ran" if index < setup_unrun_start_index else "generated_not_run"
+            else:
+                item["state"] = state
+    coverage_path.write_text(json.dumps(payload, indent=2, sort_keys=True))
+
+
 def _completed_entry(
     *,
     prepared: _PreparedSeedRun,
@@ -176,6 +261,28 @@ def _completed_entry(
             mmu_coverage_ledger_path,
             ran_rule_ids=ran_rule_ids,
         )
+    vector_mmu_coverage_path = (
+        prepared.artifact.vector_mmu_coverage_path
+        if (
+            prepared.plan.vector_mmu_coverage
+            and prepared.artifact.vector_mmu_coverage_path is not None
+            and prepared.artifact.vector_mmu_coverage_path.is_file()
+        )
+        else None
+    )
+    if vector_mmu_coverage_path is not None:
+        _mark_vector_mmu_coverage(
+            vector_mmu_coverage_path,
+            failed_item_index=_vector_failed_item_index(
+                prepared=prepared,
+                target_result=target_result,
+            ),
+            setup_unrun_start_index=_vector_setup_unrun_start_index(
+                prepared=prepared,
+                target_result=target_result,
+            ),
+            target_result=target_result,
+        )
     return RunEntry(
         suite_name=prepared.plan.suite_name,
         target=prepared.plan.target,
@@ -195,6 +302,7 @@ def _completed_entry(
         returncode=target_result.returncode,
         finish_code=target_result.finish_code,
         mmu_coverage_ledger_path=mmu_coverage_ledger_path,
+        vector_mmu_coverage_path=vector_mmu_coverage_path,
         runner_profile=target_result.runner_profile or prepared.run_artifacts.runner_profile,
         runner_revision=target_result.runner_revision,
         diff_revision=target_result.diff_revision,

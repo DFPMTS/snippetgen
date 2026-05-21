@@ -65,6 +65,7 @@ class MMUCoverageSummaryTest(unittest.TestCase):
         status: str,
         labels: list[str],
         finish_code: int | None,
+        vector_path: Path | None = None,
     ) -> dict:
         return {
             "suite": suite,
@@ -84,6 +85,28 @@ class MMUCoverageSummaryTest(unittest.TestCase):
                     "runner_revision": f"{profile}-xs",
                     "diff_revision": "nemu",
                     "mmu_coverage_ledger": str(ledger_path),
+                    "vector_mmu_coverage": str(vector_path) if vector_path is not None else None,
+                }
+            ],
+        }
+
+    def vector_payload(self, *, state: str) -> dict:
+        return {
+            "kind": "vector_mmu_coverage",
+            "suite": "kmh_mmu_layer1_v2_vector_forms",
+            "seed": 241027,
+            "state": state,
+            "items": [
+                {
+                    "id": "v2_vector_forms_strided_hit",
+                    "requestor": "vector_load_store",
+                    "mode": "host_single_stage",
+                    "form": "strided",
+                    "eew": "e8",
+                    "page_boundary": "single_page",
+                    "fault": "none",
+                    "attribute": "normal",
+                    "state": state,
                 }
             ],
         }
@@ -195,6 +218,315 @@ class MMUCoverageSummaryTest(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "missing MMU coverage ledger"):
                 summarize_mmu_coverage([batch])
+
+    def test_summary_accepts_vector_coverage_directly_and_from_batch(self) -> None:
+        from generator.xsgen.mmu_coverage_summary import summarize_mmu_coverage
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            vector = self.write_json(root / "vector_mmu_coverage.json", self.vector_payload(state="ran"))
+            ledger = self.write_json(root / "mmu_coverage_ledger.json", self.ledger_payload(rule_state="ran", tag_state="ran"))
+            batch = self.write_json(
+                root / "batch_meta.json",
+                self.batch_payload(
+                    suite="kmh_mmu_layer1_v2_vector_forms",
+                    run_batch="vector_batch",
+                    ledger_path=ledger,
+                    profile="kmh-v2/difftest",
+                    status="ran",
+                    labels=["built", "ran", "good_trap"],
+                    finish_code=0,
+                    vector_path=vector,
+                ),
+            )
+
+            direct = summarize_mmu_coverage([vector])
+            batched = summarize_mmu_coverage([batch])
+
+        self.assertEqual(1, len(direct["vector_entries"]))
+        self.assertEqual("strided", direct["vector_mmu"][0]["form"])
+        self.assertEqual(2, len(batched["entries"]))
+        self.assertEqual("vector_mmu_coverage", batched["entries"][1]["kind"])
+        self.assertEqual([0], batched["coverage_tags"][0]["entries"])
+        self.assertEqual([1], batched["vector_mmu"][0]["entries"])
+        self.assertEqual("vector_mmu_coverage", batched["entries"][batched["vector_mmu"][0]["entries"][0]]["kind"])
+        self.assertEqual("kmh-v2/difftest", batched["vector_entries"][0]["runner_profile"])
+        self.assertEqual("ran", batched["vector_mmu"][0]["states_by_profile"]["kmh-v2/difftest"])
+
+    def test_summary_counts_vector_only_batch_entries(self) -> None:
+        from generator.xsgen.mmu_coverage_summary import (
+            format_mmu_coverage_summary_text,
+            summarize_mmu_coverage,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            vector = self.write_json(root / "vector_mmu_coverage.json", self.vector_payload(state="ran"))
+            batch = self.write_json(
+                root / "batch_meta.json",
+                {
+                    "suite": "kmh_mmu_layer1_v2_vector_forms",
+                    "target": "xiangshan-verilator",
+                    "run_batch": "vector_batch",
+                    "entries": [
+                        {
+                            "suite": "kmh_mmu_layer1_v2_vector_forms",
+                            "target": "xiangshan-verilator",
+                            "run_batch": "vector_batch",
+                            "seed": 241027,
+                            "status": "ran",
+                            "labels": ["built", "ran", "good_trap"],
+                            "notes": "HIT GOOD TRAP",
+                            "finish_code": 0,
+                            "runner_profile": "kmh-v2/difftest",
+                            "runner_revision": "kmh-v2-xs",
+                            "diff_revision": "nemu",
+                            "mmu_coverage_ledger": None,
+                            "vector_mmu_coverage": str(vector),
+                        }
+                    ],
+                },
+            )
+
+            summary = summarize_mmu_coverage([batch])
+            text = format_mmu_coverage_summary_text(summary)
+
+        self.assertEqual(1, len(summary["entries"]))
+        self.assertEqual(1, len(summary["vector_entries"]))
+        self.assertEqual("vector_mmu_coverage", summary["entries"][0]["kind"])
+        self.assertIn("entries: 1", text)
+        self.assertNotIn("entries: 0", text)
+        self.assertIn("vector entries: 1", text)
+
+    def test_summary_preserves_vector_unrun_suffix_on_failed_batch(self) -> None:
+        from generator.xsgen.mmu_coverage_summary import summarize_mmu_coverage
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            vector = self.write_json(
+                root / "vector_mmu_coverage.json",
+                {
+                    "kind": "vector_mmu_coverage",
+                    "suite": "kmh_mmu_layer1_v2_vector_forms",
+                    "seed": 241027,
+                    "state": "failed_or_blocked",
+                    "items": [
+                        {
+                            "id": "v2_vector_forms_strided_hit",
+                            "requestor": "vector_load_store",
+                            "mode": "host_single_stage",
+                            "form": "strided",
+                            "eew": "e64",
+                            "page_boundary": "single_page",
+                            "fault": "none",
+                            "attribute": "normal",
+                            "state": "ran",
+                        },
+                        {
+                            "id": "v2_vector_forms_strided_fault",
+                            "requestor": "vector_load_store",
+                            "mode": "host_single_stage",
+                            "form": "strided",
+                            "eew": "e64",
+                            "page_boundary": "cross_page",
+                            "fault": "page_fault",
+                            "attribute": "normal",
+                            "state": "failed_or_blocked",
+                        },
+                        {
+                            "id": "v2_vector_forms_indexed_hit",
+                            "requestor": "vector_load_store",
+                            "mode": "host_single_stage",
+                            "form": "indexed",
+                            "eew": "e64",
+                            "page_boundary": "single_page",
+                            "fault": "none",
+                            "attribute": "normal",
+                            "state": "generated_not_run",
+                        },
+                    ],
+                },
+            )
+            batch = self.write_json(
+                root / "batch_meta.json",
+                {
+                    "suite": "kmh_mmu_layer1_v2_vector_forms",
+                    "target": "xiangshan-verilator",
+                    "run_batch": "vector_batch",
+                    "entries": [
+                        {
+                            "suite": "kmh_mmu_layer1_v2_vector_forms",
+                            "target": "xiangshan-verilator",
+                            "run_batch": "vector_batch",
+                            "seed": 241027,
+                            "status": "bad_trap",
+                            "labels": ["built", "ran", "bad_trap"],
+                            "notes": "Unknown trap code: 43",
+                            "finish_code": 43,
+                            "runner_profile": "kmh-v2/difftest",
+                            "runner_revision": "kmh-v2-xs",
+                            "diff_revision": "nemu",
+                            "mmu_coverage_ledger": None,
+                            "vector_mmu_coverage": str(vector),
+                        }
+                    ],
+                },
+            )
+
+            summary = summarize_mmu_coverage([batch])
+
+        states = {
+            item["id"]: item["state"]
+            for item in summary["vector_entries"][0]["items"]
+        }
+        self.assertEqual("ran", states["v2_vector_forms_strided_hit"])
+        self.assertEqual("failed_or_blocked", states["v2_vector_forms_strided_fault"])
+        self.assertEqual("generated_not_run", states["v2_vector_forms_indexed_hit"])
+
+    def test_summary_marks_attempted_vector_timeout_as_blocked(self) -> None:
+        from generator.xsgen.mmu_coverage_summary import summarize_mmu_coverage
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            vector = self.write_json(root / "vector_mmu_coverage.json", self.vector_payload(state="generated_not_run"))
+            batch = self.write_json(
+                root / "batch_meta.json",
+                {
+                    "suite": "kmh_mmu_layer1_v2_vector_forms",
+                    "target": "xiangshan-verilator",
+                    "run_batch": "vector_timeout",
+                    "entries": [
+                        {
+                            "suite": "kmh_mmu_layer1_v2_vector_forms",
+                            "target": "xiangshan-verilator",
+                            "run_batch": "vector_timeout",
+                            "seed": 241027,
+                            "status": "timeout",
+                            "labels": ["built", "timeout"],
+                            "notes": "timeout after 1800s",
+                            "finish_code": None,
+                            "runner_profile": "kmh-v2/difftest",
+                            "runner_revision": "kmh-v2-xs",
+                            "diff_revision": "nemu",
+                            "mmu_coverage_ledger": None,
+                            "vector_mmu_coverage": str(vector),
+                        }
+                    ],
+                },
+            )
+
+            summary = summarize_mmu_coverage([batch])
+
+        self.assertEqual(1, summary["vector_entries"][0]["item_counts"]["failed_or_blocked"])
+        self.assertEqual("failed_or_blocked", summary["vector_entries"][0]["items"][0]["state"])
+        self.assertEqual("failed_or_blocked", summary["vector_mmu"][0]["states_by_profile"]["kmh-v2/difftest"])
+
+    def test_summary_preserves_setup_failure_before_first_vector_case(self) -> None:
+        from generator.xsgen.mmu_coverage_summary import summarize_mmu_coverage
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            vector = self.write_json(
+                root / "vector_mmu_coverage.json",
+                {
+                    "kind": "vector_mmu_coverage",
+                    "suite": "kmh_mmu_layer1_v2_vector_widths",
+                    "seed": 241027,
+                    "state": "failed_or_blocked",
+                    "items": [
+                        {
+                            "id": "v2_vector_widths_e8_unit_hit",
+                            "requestor": "vector_load_store",
+                            "mode": "host_single_stage",
+                            "form": "unit_stride",
+                            "eew": "e8",
+                            "page_boundary": "single_page",
+                            "fault": "none",
+                            "attribute": "normal",
+                            "state": "generated_not_run",
+                        },
+                        {
+                            "id": "v2_vector_widths_e16_unit_hit",
+                            "requestor": "vector_load_store",
+                            "mode": "host_single_stage",
+                            "form": "unit_stride",
+                            "eew": "e16",
+                            "page_boundary": "single_page",
+                            "fault": "none",
+                            "attribute": "normal",
+                            "state": "generated_not_run",
+                        },
+                    ],
+                },
+            )
+            batch = self.write_json(
+                root / "batch_meta.json",
+                {
+                    "suite": "kmh_mmu_layer1_v2_vector_widths",
+                    "target": "xiangshan-verilator",
+                    "run_batch": "setup_failure",
+                    "entries": [
+                        {
+                            "suite": "kmh_mmu_layer1_v2_vector_widths",
+                            "target": "xiangshan-verilator",
+                            "run_batch": "setup_failure",
+                            "seed": 241027,
+                            "status": "bad_trap",
+                            "labels": ["built", "ran", "bad_trap"],
+                            "notes": "Unknown trap code: 21",
+                            "finish_code": 21,
+                            "runner_profile": "kmh-v2/difftest",
+                            "runner_revision": "kmh-v2-xs",
+                            "diff_revision": "nemu",
+                            "mmu_coverage_ledger": None,
+                            "vector_mmu_coverage": str(vector),
+                        }
+                    ],
+                },
+            )
+
+            summary = summarize_mmu_coverage([batch])
+
+        self.assertEqual(2, summary["vector_entries"][0]["item_counts"]["generated_not_run"])
+        self.assertTrue(all(item["state"] == "generated_not_run" for item in summary["vector_entries"][0]["items"]))
+        self.assertEqual("generated_not_run", summary["vector_mmu"][0]["states_by_profile"]["kmh-v2/difftest"])
+
+    def test_summary_keeps_unattempted_vector_infra_failure_unrun(self) -> None:
+        from generator.xsgen.mmu_coverage_summary import summarize_mmu_coverage
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            vector = self.write_json(root / "vector_mmu_coverage.json", self.vector_payload(state="generated_not_run"))
+            batch = self.write_json(
+                root / "batch_meta.json",
+                {
+                    "suite": "kmh_mmu_layer1_v2_vector_forms",
+                    "target": "xiangshan-verilator",
+                    "run_batch": "runner_missing",
+                    "entries": [
+                        {
+                            "suite": "kmh_mmu_layer1_v2_vector_forms",
+                            "target": "xiangshan-verilator",
+                            "run_batch": "runner_missing",
+                            "seed": 241027,
+                            "status": "run_infra_fail",
+                            "labels": ["run_infra_fail", "runner_missing"],
+                            "notes": "runner missing: emu",
+                            "finish_code": None,
+                            "runner_profile": "kmh-v2/difftest",
+                            "runner_revision": "kmh-v2-xs",
+                            "diff_revision": "nemu",
+                            "mmu_coverage_ledger": None,
+                            "vector_mmu_coverage": str(vector),
+                        }
+                    ],
+                },
+            )
+
+            summary = summarize_mmu_coverage([batch])
+
+        self.assertEqual("generated_not_run", summary["vector_entries"][0]["items"][0]["state"])
+        self.assertEqual("generated_not_run", summary["vector_mmu"][0]["states_by_profile"]["kmh-v2/difftest"])
 
 
 if __name__ == "__main__":

@@ -456,6 +456,39 @@ class SnippetLoadingTest(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "cannot mix"):
                         suite_loader.load_suite(suite_path)
 
+    def test_suite_loader_rejects_invalid_vector_mmu_fail_codes(self) -> None:
+        suite_loader = importlib.import_module("generator.xsgen.suite_loader")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            suite_path = Path(tmpdir) / "bad_vector_fail_codes.yaml"
+            suite_path.write_text(
+                textwrap.dedent(
+                    """
+                    suite: bad_vector_fail_codes
+                    target: xiangshan-verilator
+                    seed: 9
+                    compose:
+                      mode: sequence
+                      snippets:
+                        - init_basic_env
+                        - finish_check
+                      vector_mmu_coverage:
+                        - id: bad_vector_item
+                          requestor: vector_load
+                          mode: host_single_stage
+                          form: unit_stride
+                          eew: e8
+                          page_boundary: single_page
+                          fault: none
+                          attribute: normal
+                          fail_codes: "42,bad"
+                    """
+                ).strip()
+            )
+
+            with self.assertRaisesRegex(ValueError, "invalid fail_codes"):
+                suite_loader.load_suite(suite_path)
+
     def test_build_compose_plan_preserves_deferred_phase_order(self) -> None:
         snippet_db = importlib.import_module("generator.xsgen.snippet_db")
         suite_loader = importlib.import_module("generator.xsgen.suite_loader")

@@ -68,6 +68,50 @@ def _load_mmu_section(compose: Mapping[str, object], path: Path) -> tuple[Path |
     return rule_dir, rule_ids, tuple(sorted(rule_db)), tuple(coverage_tags)
 
 
+def _load_vector_mmu_coverage(compose: Mapping[str, object], path: Path) -> tuple[dict[str, str], ...]:
+    raw_vector = compose.get("vector_mmu_coverage")
+    if raw_vector is None:
+        return ()
+    if not isinstance(raw_vector, list):
+        raise ValueError(f"{path} field 'compose.vector_mmu_coverage' must be a list")
+
+    required = {
+        "id",
+        "requestor",
+        "mode",
+        "form",
+        "eew",
+        "page_boundary",
+        "fault",
+        "attribute",
+    }
+    normalized: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for index, raw_item in enumerate(raw_vector):
+        item = _require_mapping(raw_item, path)
+        missing = sorted(required - set(item))
+        if missing:
+            raise ValueError(
+                f"{path} vector_mmu_coverage[{index}] missing required fields: {', '.join(missing)}"
+            )
+        normalized_item: dict[str, str] = {}
+        for key, value in item.items():
+            if not isinstance(key, str) or not isinstance(value, str) or not value:
+                raise ValueError(f"{path} vector_mmu_coverage[{index}] contains an invalid entry")
+            normalized_item[key] = value
+        if "fail_codes" in normalized_item:
+            for raw_code in normalized_item["fail_codes"].split(","):
+                code = raw_code.strip()
+                if not code or not code.isdecimal():
+                    raise ValueError(f"{path} vector_mmu_coverage[{index}] has invalid fail_codes")
+        coverage_id = normalized_item["id"]
+        if coverage_id in seen:
+            raise ValueError(f"{path} duplicate vector MMU coverage id: {coverage_id}")
+        seen.add(coverage_id)
+        normalized.append(normalized_item)
+    return tuple(normalized)
+
+
 def load_suite(path: Path) -> SuiteSpec:
     data = _require_mapping(yaml.safe_load(path.read_text()), path)
     compose = _require_mapping(data.get("compose"), path)
@@ -106,6 +150,7 @@ def load_suite(path: Path) -> SuiteSpec:
         compose,
         path,
     )
+    vector_mmu_coverage = _load_vector_mmu_coverage(compose, path)
 
     if legacy_present:
         if not isinstance(legacy_snippet_ids, list) or not legacy_snippet_ids:
@@ -125,6 +170,7 @@ def load_suite(path: Path) -> SuiteSpec:
             mmu_rule_ids=mmu_rule_ids,
             mmu_defined_rule_ids=mmu_defined_rule_ids,
             mmu_coverage_tags=mmu_coverage_tags,
+            vector_mmu_coverage=vector_mmu_coverage,
         )
 
     if not deferred_present:
@@ -148,6 +194,7 @@ def load_suite(path: Path) -> SuiteSpec:
         snippet_ids=snippet_ids,
         run_snippet_ids=tuple(run_snippet_ids),
         check_snippet_ids=tuple(check_snippet_ids),
+        vector_mmu_coverage=vector_mmu_coverage,
     )
 
 
@@ -173,4 +220,5 @@ def build_compose_plan(
         mmu_rule_ids=suite.mmu_rule_ids,
         mmu_defined_rule_ids=suite.mmu_defined_rule_ids,
         mmu_coverage_tags=suite.mmu_coverage_tags,
+        vector_mmu_coverage=suite.vector_mmu_coverage,
     )

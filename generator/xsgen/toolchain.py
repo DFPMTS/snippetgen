@@ -28,6 +28,7 @@ def _artifact_paths_for_build_dir(build_dir: Path, suite_name: str) -> BuildArti
         generated_mmu_header_path=build_dir / "generated_mmu_rule.h",
         generated_mmu_source_path=build_dir / "generated_mmu_rule.c",
         mmu_coverage_ledger_path=build_dir / "mmu_coverage_ledger.json",
+        vector_mmu_coverage_path=build_dir / "vector_mmu_coverage.json",
     )
 
 
@@ -162,6 +163,19 @@ def am_program_snippets(plan: ComposePlan) -> list[SnippetSpec]:
     return ordered
 
 
+def _remove_failed_build_outputs(artifact: BuildArtifact) -> None:
+    for path in (
+        artifact.elf_path,
+        artifact.bin_path,
+        artifact.disasm_path,
+        artifact.build_manifest_path,
+        artifact.mmu_coverage_ledger_path,
+        artifact.vector_mmu_coverage_path,
+    ):
+        if path is not None and path.exists():
+            path.unlink()
+
+
 def build_artifacts(
     repo_root: Path,
     plan: ComposePlan,
@@ -197,6 +211,7 @@ def build_artifacts(
         artifact.generated_mmu_header_path,
         artifact.generated_mmu_source_path,
         artifact.mmu_coverage_ledger_path,
+        artifact.vector_mmu_coverage_path,
     ):
         if path.exists():
             path.unlink()
@@ -211,6 +226,22 @@ def build_artifacts(
             source_path=artifact.generated_mmu_source_path,
             coverage_ledger_path=artifact.mmu_coverage_ledger_path,
         )
+
+    if plan.vector_mmu_coverage:
+        vector_payload = {
+            "kind": "vector_mmu_coverage",
+            "suite": plan.suite_name,
+            "seed": plan.seed,
+            "state": "generated_not_run",
+            "items": [
+                {
+                    **item,
+                    "state": "generated_not_run",
+                }
+                for item in plan.vector_mmu_coverage
+            ],
+        }
+        artifact.vector_mmu_coverage_path.write_text(json.dumps(vector_payload, indent=2, sort_keys=True))
 
     for index, source_path in enumerate(runtime_source_list, start=1):
         object_path = object_dir / f"{index:02d}_{source_path.stem}.o"
@@ -232,6 +263,7 @@ def build_artifacts(
         )
         compile_commands.append(compile_cmd)
         if compile_result.returncode != 0:
+            _remove_failed_build_outputs(artifact)
             raise RuntimeError(compile_result.stderr or "RISC-V compile failed")
         object_paths.append(str(object_path))
 
@@ -256,6 +288,7 @@ def build_artifacts(
         )
         compile_commands.append(compile_cmd)
         if compile_result.returncode != 0:
+            _remove_failed_build_outputs(artifact)
             raise RuntimeError(compile_result.stderr or "RISC-V compile failed")
         object_paths.append(str(object_path))
         source_index += 1
@@ -282,6 +315,7 @@ def build_artifacts(
             )
             compile_commands.append(compile_cmd)
             if compile_result.returncode != 0:
+                _remove_failed_build_outputs(artifact)
                 raise RuntimeError(compile_result.stderr or "RISC-V compile failed")
             object_paths.append(str(object_path))
             source_index += 1
@@ -305,6 +339,7 @@ def build_artifacts(
         )
         compile_commands.append(wrapper_cmd)
         if wrapper_result.returncode != 0:
+            _remove_failed_build_outputs(artifact)
             raise RuntimeError(wrapper_result.stderr or "RISC-V compile failed")
         object_paths.append(str(wrapper_object))
         source_index += 1
@@ -329,6 +364,7 @@ def build_artifacts(
         )
         compile_commands.append(generated_mmu_cmd)
         if generated_mmu_result.returncode != 0:
+            _remove_failed_build_outputs(artifact)
             raise RuntimeError(generated_mmu_result.stderr or "RISC-V compile failed")
         object_paths.append(str(generated_mmu_object))
         source_index += 1
@@ -352,6 +388,7 @@ def build_artifacts(
     )
     compile_commands.append(generated_compile_cmd)
     if generated_compile_result.returncode != 0:
+        _remove_failed_build_outputs(artifact)
         raise RuntimeError(generated_compile_result.stderr or "RISC-V compile failed")
     object_paths.append(str(generated_object))
 
@@ -375,14 +412,7 @@ def build_artifacts(
         text=True,
     )
     if link_result.returncode != 0:
-        for path in (
-            artifact.elf_path,
-            artifact.bin_path,
-            artifact.build_manifest_path,
-            artifact.mmu_coverage_ledger_path,
-        ):
-            if path.exists():
-                path.unlink()
+        _remove_failed_build_outputs(artifact)
         raise RuntimeError(link_result.stderr or "RISC-V link failed")
 
     objcopy_cmd = [
@@ -400,25 +430,10 @@ def build_artifacts(
             text=True,
         )
     except FileNotFoundError as exc:
-        for path in (
-            artifact.elf_path,
-            artifact.bin_path,
-            artifact.build_manifest_path,
-            artifact.mmu_coverage_ledger_path,
-        ):
-            if path.exists():
-                path.unlink()
+        _remove_failed_build_outputs(artifact)
         raise RuntimeError(f"objcopy failed: {objcopy_cmd[0]}") from exc
     if objcopy_result.returncode != 0:
-        for path in (
-            artifact.elf_path,
-            artifact.bin_path,
-            artifact.disasm_path,
-            artifact.build_manifest_path,
-            artifact.mmu_coverage_ledger_path,
-        ):
-            if path.exists():
-                path.unlink()
+        _remove_failed_build_outputs(artifact)
         raise RuntimeError(objcopy_result.stderr or "RISC-V objcopy failed")
 
     objdump_cmd = [
@@ -433,15 +448,7 @@ def build_artifacts(
         text=True,
     )
     if objdump_result.returncode != 0:
-        for path in (
-            artifact.elf_path,
-            artifact.bin_path,
-            artifact.disasm_path,
-            artifact.build_manifest_path,
-            artifact.mmu_coverage_ledger_path,
-        ):
-            if path.exists():
-                path.unlink()
+        _remove_failed_build_outputs(artifact)
         raise RuntimeError(objdump_result.stderr or "RISC-V objdump failed")
     artifact.disasm_path.write_text(objdump_result.stdout)
 
@@ -462,6 +469,8 @@ def build_artifacts(
                 "mmu_coverage_ledger": str(artifact.mmu_coverage_ledger_path),
             }
         )
+    if plan.vector_mmu_coverage:
+        artifact_payload["vector_mmu_coverage"] = str(artifact.vector_mmu_coverage_path)
 
     manifest_payload = {
         "suite": plan.suite_name,
@@ -490,5 +499,10 @@ def build_artifacts(
         }
         if mmu_bundle is not None:
             manifest_payload["mmu"]["emitted_coverage_tags"] = list(mmu_bundle.coverage_tags)
+    if plan.vector_mmu_coverage:
+        manifest_payload["vector_mmu"] = {
+            "coverage_path": str(artifact.vector_mmu_coverage_path),
+            "coverage": [dict(item) for item in plan.vector_mmu_coverage],
+        }
     artifact.build_manifest_path.write_text(json.dumps(manifest_payload, indent=2, sort_keys=True))
     return artifact

@@ -34,6 +34,91 @@ class RunPipelineTest(unittest.TestCase):
         if self.mmu_run_root.exists():
             shutil.rmtree(self.mmu_run_root)
 
+    def _vector_coverage_after_target_result(
+        self,
+        *,
+        suite_name: str,
+        coverage_items: tuple[dict[str, str], ...],
+        finish_code: int | None,
+        status: str = "bad_trap",
+        labels: tuple[str, ...] = ("built", "ran", "bad_trap"),
+        notes: str | None = None,
+    ):
+        run_batch = importlib.import_module("generator.xsgen.run_batch")
+        model = importlib.import_module("generator.xsgen.model")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            coverage_path = tmp / "vector_mmu_coverage.json"
+            coverage_path.write_text(
+                json.dumps(
+                    {
+                        "kind": "vector_mmu_coverage",
+                        "suite": suite_name,
+                        "seed": 23,
+                        "state": "generated_not_run",
+                        "items": [
+                            {
+                                **item,
+                                "state": "generated_not_run",
+                            }
+                            for item in coverage_items
+                        ],
+                    }
+                )
+            )
+            artifact = model.BuildArtifact(
+                suite_name=suite_name,
+                build_dir=tmp,
+                generated_suite_path=tmp / "generated_suite.c",
+                elf_path=tmp / "test.elf",
+                bin_path=tmp / "test.bin",
+                disasm_path=tmp / "disasm",
+                vector_mmu_coverage_path=coverage_path,
+            )
+            prepared = run_batch._PreparedSeedRun(
+                seed=23,
+                plan=model.ComposePlan(
+                    suite_name=suite_name,
+                    target="xiangshan-verilator",
+                    seed=23,
+                    snippet_ids=(),
+                    snippets=(),
+                    vector_mmu_coverage=coverage_items,
+                ),
+                artifact=artifact,
+                run_artifacts=model.RunSeedArtifacts(
+                    suite_name=suite_name,
+                    target="xiangshan-verilator",
+                    seed=23,
+                    run_batch="vector-coverage-partial",
+                    build_artifact=artifact,
+                    stdout_log_path=tmp / "stdout.log",
+                    stderr_log_path=tmp / "stderr.log",
+                    run_meta_path=tmp / "run_meta.json",
+                    wave_path=tmp / "wave",
+                ),
+                stdout_log_path=tmp / "stdout.log",
+                stderr_log_path=tmp / "stderr.log",
+                run_meta_path=tmp / "run_meta.json",
+                wave_path=tmp / "wave",
+            )
+
+            entry = run_batch._completed_entry(
+                prepared=prepared,
+                target_result=model.TargetRunResult(
+                    status=status,
+                    labels=labels,
+                    notes=notes if notes is not None else f"Unknown trap code: {finish_code}",
+                    returncode=0,
+                    finish_code=finish_code,
+                ),
+            )
+
+            vector_coverage = json.loads(coverage_path.read_text())
+
+        return entry, vector_coverage
+
     def test_normalize_seeds_accepts_single_list_and_range(self) -> None:
         run_batch = importlib.import_module("generator.xsgen.run_batch")
 
@@ -1102,8 +1187,10 @@ class RunPipelineTest(unittest.TestCase):
                     ledger["entries"][seed - 11]["disasm"],
                 )
                 self.assertIsNone(ledger["entries"][seed - 11]["mmu_coverage_ledger"])
+                self.assertIsNone(ledger["entries"][seed - 11]["vector_mmu_coverage"])
                 run_meta = json.loads((seed_dir / "run_meta.json").read_text())
                 self.assertIsNone(run_meta["mmu_coverage_ledger"])
+                self.assertIsNone(run_meta["vector_mmu_coverage"])
 
     def test_run_batch_writes_finish_code_to_run_meta_and_batch_meta(self) -> None:
         run_batch = importlib.import_module("generator.xsgen.run_batch")
@@ -1431,6 +1518,419 @@ class RunPipelineTest(unittest.TestCase):
         self.assertEqual("ran", rule_states["two_stage_fault"])
         self.assertEqual("ran", tag_states["guest.two_stage"])
         self.assertEqual("ran", tag_states["requestor.load"])
+
+    def test_run_batch_marks_vector_mmu_coverage_by_target_result(self) -> None:
+        run_batch = importlib.import_module("generator.xsgen.run_batch")
+        model = importlib.import_module("generator.xsgen.model")
+
+        def fake_target_loader(repo_root: Path, target: str):
+            def run_target(*, artifacts, timeout_s):
+                artifacts.stdout_log_path.write_text("HIT GOOD TRAP\n")
+                artifacts.stderr_log_path.write_text("")
+                return model.TargetRunResult(
+                    status="ran",
+                    labels=("built", "ran", "good_trap"),
+                    notes="HIT GOOD TRAP",
+                    returncode=0,
+                    finish_code=0,
+                )
+
+            return run_target
+
+        ledger_path = run_batch.run_suite_batch(
+            repo_root=ROOT,
+            suite_path=ROOT / "suites" / "kmh_mmu_layer1_v2_vector_forms.yaml",
+            seed_values=(17,),
+            target_loader=fake_target_loader,
+            run_batch_id="vector-coverage-demo",
+        )
+
+        batch_ledger = json.loads(ledger_path.read_text())
+        seed_dir = ROOT / "build" / "kmh_mmu_layer1_v2_vector_forms" / "runs" / "vector-coverage-demo" / "seed_17"
+        if batch_ledger["entries"][0]["status"] in {"error", "build_fail"}:
+            error_note = batch_ledger["entries"][0]["notes"]
+            if (
+                "unknown z ISA extension `zicbop'" in error_note
+                or "cannot find default versions of the ISA extension `v'" in error_note
+            ):
+                self.skipTest("installed RISC-V toolchain lacks XiangShan ISA extensions")
+        vector_coverage = json.loads((seed_dir / "vector_mmu_coverage.json").read_text())
+
+        self.assertTrue(batch_ledger["entries"][0]["vector_mmu_coverage"].endswith("vector_mmu_coverage.json"))
+        self.assertEqual("ran", vector_coverage["state"])
+        self.assertTrue(all(item["state"] == "ran" for item in vector_coverage["items"]))
+
+    def test_run_batch_preserves_partial_vector_mmu_coverage_for_late_failure(self) -> None:
+        coverage_items = tuple(
+            {
+                "id": coverage_id,
+                "requestor": "vector_load_store",
+                "mode": "host_single_stage",
+                "form": "unit_stride",
+                "eew": "e8",
+                "page_boundary": "single_page",
+                "fault": "none",
+                "attribute": "normal",
+                "fail_codes": fail_codes,
+            }
+            for coverage_id, fail_codes in (
+                ("v2_vector_forms_strided_hit", "42"),
+                ("v2_vector_forms_strided_fault", "43"),
+                ("v2_vector_forms_indexed_hit", "44"),
+                ("v2_vector_forms_indexed_fault", "45"),
+                ("v2_vector_forms_segment_hit", "46"),
+                ("v2_vector_forms_fof_later_fault", "47"),
+                ("v2_vector_forms_fof_first_fault", "48"),
+                ("v2_vector_forms_vstart_store", "49"),
+            )
+        )
+
+        entry, vector_coverage = self._vector_coverage_after_target_result(
+            suite_name="kmh_mmu_layer1_v2_vector_forms",
+            coverage_items=coverage_items,
+            finish_code=45,
+        )
+
+        item_states = {item["id"]: item["state"] for item in vector_coverage["items"]}
+        self.assertEqual("bad_trap", entry.status)
+        self.assertEqual("failed_or_blocked", vector_coverage["state"])
+        self.assertEqual("ran", item_states["v2_vector_forms_strided_hit"])
+        self.assertEqual("ran", item_states["v2_vector_forms_strided_fault"])
+        self.assertEqual("ran", item_states["v2_vector_forms_indexed_hit"])
+        self.assertEqual("failed_or_blocked", item_states["v2_vector_forms_indexed_fault"])
+        self.assertEqual("generated_not_run", item_states["v2_vector_forms_vstart_store"])
+
+    def test_run_batch_preserves_partial_vector_mmu_coverage_for_noncontiguous_fail_codes(self) -> None:
+        coverage_items = tuple(
+            {
+                "id": coverage_id,
+                "requestor": "vector_load_store",
+                "mode": "host_single_stage",
+                "form": "unit_stride",
+                "eew": "e8",
+                "page_boundary": "single_page",
+                "fault": "none",
+                "attribute": "normal",
+                "fail_codes": fail_codes,
+            }
+            for coverage_id, fail_codes in (
+                ("v2_vector_faults_cross_invalid_load", "32"),
+                ("v2_vector_faults_cross_invalid_store", "33"),
+                ("v2_vector_faults_cross_no_perm_load", "38"),
+                ("v2_vector_faults_cross_no_perm_store", "39"),
+                ("v2_vector_faults_masked_off_suppression", "34,35"),
+                ("v2_vector_faults_masked_on_trigger", "36,37"),
+            )
+        )
+
+        _, vector_coverage = self._vector_coverage_after_target_result(
+            suite_name="kmh_mmu_layer1_v2_vector_faults",
+            coverage_items=coverage_items,
+            finish_code=36,
+        )
+
+        item_states = {item["id"]: item["state"] for item in vector_coverage["items"]}
+        self.assertEqual("failed_or_blocked", vector_coverage["state"])
+        self.assertEqual("ran", item_states["v2_vector_faults_cross_no_perm_store"])
+        self.assertEqual("ran", item_states["v2_vector_faults_masked_off_suppression"])
+        self.assertEqual("failed_or_blocked", item_states["v2_vector_faults_masked_on_trigger"])
+
+    def test_run_batch_distinguishes_first_failed_vector_item_from_unrun_items(self) -> None:
+        coverage_items = (
+            {
+                "id": "v2_vector_forms_strided_hit",
+                "requestor": "vector_load_store",
+                "mode": "host_single_stage",
+                "form": "strided",
+                "eew": "e64",
+                "page_boundary": "single_page",
+                "fault": "none",
+                "attribute": "normal",
+                "fail_codes": "42",
+            },
+            {
+                "id": "v2_vector_forms_strided_fault",
+                "requestor": "vector_load_store",
+                "mode": "host_single_stage",
+                "form": "strided",
+                "eew": "e64",
+                "page_boundary": "cross_page",
+                "fault": "page_fault",
+                "attribute": "normal",
+                "fail_codes": "43",
+            },
+        )
+
+        _, vector_coverage = self._vector_coverage_after_target_result(
+            suite_name="kmh_mmu_layer1_v2_vector_forms",
+            coverage_items=coverage_items,
+            finish_code=42,
+        )
+
+        item_states = {item["id"]: item["state"] for item in vector_coverage["items"]}
+        self.assertEqual("failed_or_blocked", vector_coverage["state"])
+        self.assertEqual("failed_or_blocked", item_states["v2_vector_forms_strided_hit"])
+        self.assertEqual("generated_not_run", item_states["v2_vector_forms_strided_fault"])
+
+    def test_run_batch_keeps_vector_items_unrun_for_setup_failure_before_first_case(self) -> None:
+        coverage_items = (
+            {
+                "id": "v2_vector_widths_e8_unit_hit",
+                "requestor": "vector_load_store",
+                "mode": "host_single_stage",
+                "form": "unit_stride",
+                "eew": "e8",
+                "page_boundary": "single_page",
+                "fault": "none",
+                "attribute": "normal",
+                "fail_codes": "22",
+            },
+            {
+                "id": "v2_vector_widths_e16_unit_hit",
+                "requestor": "vector_load_store",
+                "mode": "host_single_stage",
+                "form": "unit_stride",
+                "eew": "e16",
+                "page_boundary": "single_page",
+                "fault": "none",
+                "attribute": "normal",
+                "fail_codes": "23",
+            },
+        )
+
+        entry, vector_coverage = self._vector_coverage_after_target_result(
+            suite_name="kmh_mmu_layer1_v2_vector_widths",
+            coverage_items=coverage_items,
+            finish_code=21,
+        )
+
+        self.assertEqual("bad_trap", entry.status)
+        self.assertEqual("failed_or_blocked", vector_coverage["state"])
+        self.assertTrue(all(item["state"] == "generated_not_run" for item in vector_coverage["items"]))
+
+    def test_run_batch_marks_completed_prefix_for_setup_failure_between_cases(self) -> None:
+        coverage_items = (
+            {
+                "id": "v2_vector_smoke_bare_unit_e8_hit",
+                "requestor": "vector_load_store",
+                "mode": "bare",
+                "form": "unit_stride",
+                "eew": "e8",
+                "page_boundary": "single_page",
+                "fault": "none",
+                "attribute": "normal",
+                "fail_codes": "11",
+            },
+            {
+                "id": "v2_vector_smoke_sv39_unit_e8_hit",
+                "requestor": "vector_load_store",
+                "mode": "host_single_stage",
+                "form": "unit_stride",
+                "eew": "e8",
+                "page_boundary": "single_page",
+                "fault": "none",
+                "attribute": "normal",
+                "fail_codes": "13",
+            },
+            {
+                "id": "v2_vector_smoke_sv39_load_page_fault",
+                "requestor": "vector_load",
+                "mode": "host_single_stage",
+                "form": "unit_stride",
+                "eew": "e8",
+                "page_boundary": "single_page",
+                "fault": "load_page_fault",
+                "attribute": "normal",
+                "fail_codes": "15",
+            },
+        )
+
+        _, vector_coverage = self._vector_coverage_after_target_result(
+            suite_name="kmh_mmu_layer1_v2_vector_smoke",
+            coverage_items=coverage_items,
+            finish_code=12,
+        )
+
+        item_states = {item["id"]: item["state"] for item in vector_coverage["items"]}
+        self.assertEqual("failed_or_blocked", vector_coverage["state"])
+        self.assertEqual("ran", item_states["v2_vector_smoke_bare_unit_e8_hit"])
+        self.assertEqual("generated_not_run", item_states["v2_vector_smoke_sv39_unit_e8_hit"])
+        self.assertEqual("generated_not_run", item_states["v2_vector_smoke_sv39_load_page_fault"])
+
+    def test_run_batch_keeps_unstructured_vector_bad_trap_as_blocked(self) -> None:
+        coverage_items = (
+            {
+                "id": "v2_vector_widths_e8_unit_hit",
+                "requestor": "vector_load_store",
+                "mode": "host_single_stage",
+                "form": "unit_stride",
+                "eew": "e8",
+                "page_boundary": "single_page",
+                "fault": "none",
+                "attribute": "normal",
+                "fail_codes": "22",
+            },
+        )
+
+        _, vector_coverage = self._vector_coverage_after_target_result(
+            suite_name="kmh_mmu_layer1_v2_vector_widths",
+            coverage_items=coverage_items,
+            finish_code=1,
+            notes="HIT BAD TRAP",
+        )
+
+        self.assertEqual("failed_or_blocked", vector_coverage["state"])
+        self.assertEqual("failed_or_blocked", vector_coverage["items"][0]["state"])
+
+    def test_run_batch_keeps_vector_items_unrun_for_infra_failure_before_run(self) -> None:
+        coverage_items = (
+            {
+                "id": "v2_vector_widths_e8_unit_hit",
+                "requestor": "vector_load_store",
+                "mode": "host_single_stage",
+                "form": "unit_stride",
+                "eew": "e8",
+                "page_boundary": "single_page",
+                "fault": "none",
+                "attribute": "normal",
+                "fail_codes": "22",
+            },
+            {
+                "id": "v2_vector_widths_e16_unit_hit",
+                "requestor": "vector_load_store",
+                "mode": "host_single_stage",
+                "form": "unit_stride",
+                "eew": "e16",
+                "page_boundary": "single_page",
+                "fault": "none",
+                "attribute": "normal",
+                "fail_codes": "23",
+            },
+        )
+
+        entry, vector_coverage = self._vector_coverage_after_target_result(
+            suite_name="kmh_mmu_layer1_v2_vector_widths",
+            coverage_items=coverage_items,
+            finish_code=None,
+            status="run_infra_fail",
+            labels=("run_infra_fail", "runner_missing"),
+            notes="runner missing: emu",
+        )
+
+        self.assertEqual("run_infra_fail", entry.status)
+        self.assertEqual("generated_not_run", vector_coverage["state"])
+        self.assertTrue(all(item["state"] == "generated_not_run" for item in vector_coverage["items"]))
+
+    def test_run_batch_marks_vector_timeout_as_attempted_blocked(self) -> None:
+        coverage_items = (
+            {
+                "id": "v2_vector_widths_e8_unit_hit",
+                "requestor": "vector_load_store",
+                "mode": "host_single_stage",
+                "form": "unit_stride",
+                "eew": "e8",
+                "page_boundary": "single_page",
+                "fault": "none",
+                "attribute": "normal",
+                "fail_codes": "22",
+            },
+            {
+                "id": "v2_vector_widths_e16_unit_hit",
+                "requestor": "vector_load_store",
+                "mode": "host_single_stage",
+                "form": "unit_stride",
+                "eew": "e16",
+                "page_boundary": "single_page",
+                "fault": "none",
+                "attribute": "normal",
+                "fail_codes": "23",
+            },
+        )
+
+        entry, vector_coverage = self._vector_coverage_after_target_result(
+            suite_name="kmh_mmu_layer1_v2_vector_widths",
+            coverage_items=coverage_items,
+            finish_code=None,
+            status="timeout",
+            labels=("built", "timeout"),
+            notes="timeout after 1800s",
+        )
+
+        self.assertEqual("timeout", entry.status)
+        self.assertEqual("failed_or_blocked", vector_coverage["state"])
+        self.assertTrue(all(item["state"] == "failed_or_blocked" for item in vector_coverage["items"]))
+
+    def test_completed_entry_drops_missing_vector_coverage_path_for_build_failure(self) -> None:
+        run_batch = importlib.import_module("generator.xsgen.run_batch")
+        model = importlib.import_module("generator.xsgen.model")
+
+        coverage_items = (
+            {
+                "id": "v2_vector_forms_strided_hit",
+                "requestor": "vector_load_store",
+                "mode": "host_single_stage",
+                "form": "strided",
+                "eew": "e64",
+                "page_boundary": "single_page",
+                "fault": "none",
+                "attribute": "normal",
+                "fail_codes": "42",
+            },
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            artifact = model.BuildArtifact(
+                suite_name="kmh_mmu_layer1_v2_vector_forms",
+                build_dir=tmp,
+                generated_suite_path=tmp / "generated_suite.c",
+                elf_path=tmp / "test.elf",
+                bin_path=tmp / "test.bin",
+                disasm_path=tmp / "disasm",
+                vector_mmu_coverage_path=tmp / "vector_mmu_coverage.json",
+            )
+            prepared = run_batch._PreparedSeedRun(
+                seed=23,
+                plan=model.ComposePlan(
+                    suite_name="kmh_mmu_layer1_v2_vector_forms",
+                    target="xiangshan-verilator",
+                    seed=23,
+                    snippet_ids=(),
+                    snippets=(),
+                    vector_mmu_coverage=coverage_items,
+                ),
+                artifact=artifact,
+                run_artifacts=model.RunSeedArtifacts(
+                    suite_name="kmh_mmu_layer1_v2_vector_forms",
+                    target="xiangshan-verilator",
+                    seed=23,
+                    run_batch="vector-build-fail",
+                    build_artifact=artifact,
+                    stdout_log_path=tmp / "stdout.log",
+                    stderr_log_path=tmp / "stderr.log",
+                    run_meta_path=tmp / "run_meta.json",
+                    wave_path=tmp / "wave",
+                ),
+                stdout_log_path=tmp / "stdout.log",
+                stderr_log_path=tmp / "stderr.log",
+                run_meta_path=tmp / "run_meta.json",
+                wave_path=tmp / "wave",
+            )
+
+            entry = run_batch._completed_entry(
+                prepared=prepared,
+                target_result=model.TargetRunResult(
+                    status="build_fail",
+                    labels=("build_fail",),
+                    notes="compile failed before vector coverage emission",
+                    returncode=None,
+                    finish_code=None,
+                ),
+            )
+
+        payload = run_batch._entry_payload(entry)
+        self.assertIsNone(entry.vector_mmu_coverage_path)
+        self.assertIsNone(payload["vector_mmu_coverage"])
 
     def test_run_batch_does_not_mark_mmu_coverage_ran_for_non_good_sim_exit(self) -> None:
         run_batch = importlib.import_module("generator.xsgen.run_batch")
